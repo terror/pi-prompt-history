@@ -43,7 +43,7 @@ export function extractPrompts(
 
       if (
         entry.type === 'session_info' &&
-        parentSession &&
+        Boolean(parentSession) &&
         /#[0-9a-f]{8}$/i.test(entry.name ?? '')
       ) {
         return [];
@@ -115,7 +115,7 @@ async function readDirectory(path: string) {
 }
 
 export class HistoryStore {
-  private cache = new Map<
+  private readonly cache = new Map<
     string,
     { mtime: number; size: number; prompts: Prompt[] }
   >();
@@ -163,7 +163,7 @@ export class HistoryStore {
         const cached = this.cache.get(file);
 
         const entry =
-          cached && cached.mtime === info.mtimeMs && cached.size === info.size
+          cached?.mtime === info.mtimeMs && cached.size === info.size
             ? cached
             : {
                 mtime: info.mtimeMs,

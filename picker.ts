@@ -26,18 +26,18 @@ function displayText(text: string): string {
 }
 
 export class HistoryPicker implements Component, Focusable {
-  private input: Input;
+  private readonly input: Input;
   private list!: SelectList;
   private matches: Prompt[] = [];
   private maxVisible = 8;
 
   constructor(
-    private tui: TUI,
-    private theme: Theme,
-    private keybindings: KeybindingsManager,
-    private prompts: Prompt[],
+    private readonly tui: TUI,
+    private readonly theme: Theme,
+    private readonly keybindings: KeybindingsManager,
+    private readonly prompts: Prompt[],
     query: string,
-    private done: (value: string | undefined) => void
+    private readonly done: (value: string | undefined) => void
   ) {
     this.input = new Input({
       placeholder: 'Search prompts or project paths…',
@@ -89,7 +89,7 @@ export class HistoryPicker implements Component, Focusable {
     );
 
     this.list.onSelect = (item) =>
-      this.done(this.matches[Number(item.value)].text);
+      this.done(this.matches[Number(item.value)]?.text);
     this.list.onCancel = () => this.done(undefined);
     this.list.setSelectedIndex(index);
   }
@@ -112,7 +112,9 @@ export class HistoryPicker implements Component, Focusable {
     ) {
       this.list.handleInput(data);
     } else if (matchesKey(data, Key.ctrl('r'))) {
-      if (count) this.list.setSelectedIndex((index + 1) % count);
+      if (count) {
+        this.list.setSelectedIndex((index + 1) % count);
+      }
     } else if (kb.matches(data, 'tui.select.pageUp')) {
       this.list.setSelectedIndex(index - this.maxVisible);
     } else if (kb.matches(data, 'tui.select.pageDown')) {
@@ -151,7 +153,7 @@ export class HistoryPicker implements Component, Focusable {
       this.theme.fg(
         'accent',
         this.theme.bold(
-          `Prompt history · ${this.matches.length}/${this.prompts.length}`
+          `Prompt history · ${String(this.matches.length)}/${String(this.prompts.length)}`
         )
       ),
       ...this.input.render(width),
