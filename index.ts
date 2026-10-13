@@ -76,8 +76,7 @@ export default function (pi: ExtensionAPI) {
 
       const current = extractPrompts(
         ctx.sessionManager.getEntries(),
-        ctx.sessionManager.getCwd(),
-        ctx.sessionManager.getHeader()?.parentSession
+        ctx.sessionManager.getCwd()
       );
 
       const prompts = uniquePrompts([...current, ...history.prompts]);

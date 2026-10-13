@@ -29,8 +29,7 @@ function getPrompt(entry: FileEntry, cwd: string): Prompt | undefined {
 
 export function extractPrompts(
   entries: Iterable<FileEntry>,
-  cwd = '',
-  parentSession?: string
+  cwd = ''
 ): Prompt[] {
   const prompts: Prompt[] = [];
 
@@ -38,15 +37,6 @@ export function extractPrompts(
     try {
       if (entry.type === 'session' && typeof entry.cwd === 'string') {
         cwd = entry.cwd;
-        parentSession = entry.parentSession;
-      }
-
-      if (
-        entry.type === 'session_info' &&
-        Boolean(parentSession) &&
-        /#[0-9a-f]{8}$/i.test(entry.name ?? '')
-      ) {
-        return [];
       }
 
       const prompt = getPrompt(entry, cwd);
