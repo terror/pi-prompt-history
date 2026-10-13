@@ -75,7 +75,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['picker.ts'],
+    files: ['src/picker.ts'],
     rules: {
       'no-control-regex': 'off',
     },
