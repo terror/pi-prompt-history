@@ -5,11 +5,12 @@
   "type": "module",
   "packageManager": "bun@1.4.3",
   "scripts": {
-    "check": "bun run typecheck && bun run lint && bun run format:check",
+    "check": "bun run typecheck && bun run lint && bun run format:check && bun run test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "bun run lint --fix",
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "pi": {
@@ -28,6 +29,7 @@
     "@earendil-works/pi-tui": "1.1.0",
     "@eslint/js": "10.0.1",
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
+    "@types/bun": "1.4.3",
     "@types/node": "22.20.5",
     "eslint": "10.12.0",
     "eslint-config-prettier": "10.1.8",

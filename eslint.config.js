@@ -23,7 +23,7 @@ export default defineConfig(
       reportUnusedInlineConfigs: 'error',
     },
     settings: {
-      'import-x/resolver-next': [createTypeScriptImportResolver()],
+      'import-x/resolver-next': [createTypeScriptImportResolver({ bun: true })],
     },
     rules: {
       curly: ['error', 'all'],
