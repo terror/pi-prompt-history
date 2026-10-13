@@ -25,20 +25,42 @@ function displayText(text: string): string {
     .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
 }
 
+interface DisplayPrompt extends Prompt {
+  label: string;
+  searchText: string;
+  displayText: string;
+  displayCwd: string;
+}
+
 export class HistoryPicker implements Component, Focusable {
   private readonly input: Input;
+  private readonly prompts: DisplayPrompt[];
   private list!: SelectList;
-  private matches: Prompt[] = [];
+  private matches: DisplayPrompt[] = [];
   private maxVisible = 8;
+  private preview:
+    { prompt: DisplayPrompt; width: number; lines: string[] } | undefined;
 
   constructor(
     private readonly tui: TUI,
     private readonly theme: Theme,
     private readonly keybindings: KeybindingsManager,
-    private readonly prompts: Prompt[],
+    prompts: Prompt[],
     query: string,
     private readonly done: (value: string | undefined) => void
   ) {
+    this.prompts = prompts.map((prompt) => {
+      const text = displayText(prompt.text);
+
+      return {
+        ...prompt,
+        label: text.replace(/\s+/g, ' ').slice(0, 200),
+        searchText: `${prompt.text}\n${prompt.cwd}`,
+        displayText: text,
+        displayCwd: displayText(prompt.cwd).replace(/\n/g, ' '),
+      };
+    });
+
     this.input = new Input({
       placeholder: 'Search prompts or project paths…',
       placeholderStyle: (text) => theme.fg('dim', text),
@@ -67,7 +89,7 @@ export class HistoryPicker implements Component, Focusable {
     this.matches = fuzzyFilter(
       this.prompts,
       this.input.getValue(),
-      (prompt) => `${prompt.text}\n${prompt.cwd}`
+      (prompt) => prompt.searchText
     );
     this.createList();
   }
@@ -76,7 +98,7 @@ export class HistoryPicker implements Component, Focusable {
     this.list = new SelectList(
       this.matches.map((prompt, index) => ({
         value: String(index),
-        label: displayText(prompt.text).replace(/\s+/g, ' ').slice(0, 200),
+        label: prompt.label,
       })),
       this.maxVisible,
       {
@@ -166,19 +188,22 @@ export class HistoryPicker implements Component, Focusable {
     const previewRows = Math.min(6, rows - lines.length - 4);
 
     if (selected && previewRows > 0) {
-      const date = selected.timestamp
-        ? new Date(selected.timestamp).toLocaleString()
-        : 'Unknown date';
+      const date = new Date(selected.timestamp).toLocaleString();
 
       lines.push(
         '',
-        this.theme.fg(
-          'muted',
-          `${date} · ${displayText(selected.cwd).replace(/\n/g, ' ')}`
-        )
+        this.theme.fg('muted', `${date} · ${selected.displayCwd}`)
       );
 
-      const preview = wrapTextWithAnsi(displayText(selected.text), width);
+      if (this.preview?.prompt !== selected || this.preview.width !== width) {
+        this.preview = {
+          prompt: selected,
+          width,
+          lines: wrapTextWithAnsi(selected.displayText, width),
+        };
+      }
+
+      const preview = this.preview.lines;
 
       lines.push(...preview.slice(0, previewRows));
 

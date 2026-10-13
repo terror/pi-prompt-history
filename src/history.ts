@@ -34,18 +34,14 @@ export function extractPrompts(
   const prompts: Prompt[] = [];
 
   for (const entry of entries) {
-    try {
-      if (entry.type === 'session' && typeof entry.cwd === 'string') {
-        cwd = entry.cwd;
-      }
+    if (entry.type === 'session' && typeof entry.cwd === 'string') {
+      cwd = entry.cwd;
+    }
 
-      const prompt = getPrompt(entry, cwd);
+    const prompt = getPrompt(entry, cwd);
 
-      if (prompt) {
-        prompts.push(prompt);
-      }
-    } catch {
-      continue;
+    if (prompt) {
+      prompts.push(prompt);
     }
   }
 
@@ -65,14 +61,28 @@ function* parseEntries(content: Uint8Array): Generator<FileEntry> {
     offset = end + 1;
 
     try {
-      yield JSON.parse(decoder.decode(line)) as FileEntry;
+      const entry = JSON.parse(decoder.decode(line)) as FileEntry;
+
+      if (
+        entry.type === 'message' &&
+        (entry.message.role !== 'user' ||
+          !Number.isFinite(entry.message.timestamp) ||
+          (typeof entry.message.content !== 'string' &&
+            !entry.message.content.every(
+              (block) => block.type !== 'text' || typeof block.text === 'string'
+            )))
+      ) {
+        continue;
+      }
+
+      yield entry;
     } catch {
       continue;
     }
   }
 }
 
-export function parseSession(content: Uint8Array): Prompt[] {
+function parseSession(content: Uint8Array): Prompt[] {
   return extractPrompts(parseEntries(content));
 }
 
