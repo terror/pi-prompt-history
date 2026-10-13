@@ -3,46 +3,68 @@ import type { FileEntry } from '@earendil-works/pi-coding-agent';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export interface Prompt {
+export interface PromptOccurrence {
   text: string;
   cwd: string;
   timestamp: number;
+  sessionId: string | undefined;
+  sessionFile: string | undefined;
+  entryId: string | undefined;
 }
 
-function getPrompt(entry: FileEntry, cwd: string): Prompt | undefined {
-  if (
-    entry.type !== 'message' ||
-    entry.message.role !== 'user' ||
-    !Number.isFinite(entry.message.timestamp)
-  ) {
-    return;
-  }
-
-  const text = contentText(entry.message.content);
-
-  if (!text.trim()) {
-    return;
-  }
-
-  return { text, cwd, timestamp: entry.message.timestamp };
+export interface PromptGroup {
+  text: string;
+  cwd: string;
+  timestamp: number;
+  occurrences: PromptOccurrence[];
 }
 
 export function extractPrompts(
   entries: Iterable<FileEntry>,
-  cwd = ''
-): Prompt[] {
-  const prompts: Prompt[] = [];
+  {
+    cwd = '',
+    sessionId,
+    sessionFile,
+  }: {
+    cwd?: string;
+    sessionId?: string | undefined;
+    sessionFile?: string | undefined;
+  } = {}
+): PromptOccurrence[] {
+  const prompts: PromptOccurrence[] = [];
 
   for (const entry of entries) {
-    if (entry.type === 'session' && typeof entry.cwd === 'string') {
-      cwd = entry.cwd;
+    if (entry.type === 'session') {
+      if (typeof entry.cwd === 'string') {
+        cwd = entry.cwd;
+      }
+
+      sessionId = typeof entry.id === 'string' ? entry.id : undefined;
+      continue;
     }
 
-    const prompt = getPrompt(entry, cwd);
-
-    if (prompt) {
-      prompts.push(prompt);
+    if (
+      entry.type !== 'message' ||
+      entry.message.role !== 'user' ||
+      !Number.isFinite(entry.message.timestamp)
+    ) {
+      continue;
     }
+
+    const text = contentText(entry.message.content);
+
+    if (!text.trim()) {
+      continue;
+    }
+
+    prompts.push({
+      text,
+      cwd,
+      timestamp: entry.message.timestamp,
+      sessionId,
+      sessionFile,
+      entryId: typeof entry.id === 'string' ? entry.id : undefined,
+    });
   }
 
   return prompts;
@@ -82,20 +104,31 @@ function* parseEntries(content: Uint8Array): Generator<FileEntry> {
   }
 }
 
-function parseSession(content: Uint8Array): Prompt[] {
-  return extractPrompts(parseEntries(content));
+function parseSession(
+  content: Uint8Array,
+  sessionFile: string
+): PromptOccurrence[] {
+  return extractPrompts(parseEntries(content), { sessionFile });
 }
 
-export function uniquePrompts(prompts: Prompt[]): Prompt[] {
-  const unique = new Map<string, Prompt>();
+export function uniquePrompts(prompts: PromptOccurrence[]): PromptGroup[] {
+  const unique = new Map<string, PromptGroup>();
 
   for (const prompt of prompts) {
     const key = JSON.stringify([prompt.text, prompt.cwd]);
 
     const previous = unique.get(key);
 
-    if (!previous || prompt.timestamp > previous.timestamp) {
-      unique.set(key, prompt);
+    if (previous) {
+      previous.occurrences.push(prompt);
+      previous.timestamp = Math.max(previous.timestamp, prompt.timestamp);
+    } else {
+      unique.set(key, {
+        text: prompt.text,
+        cwd: prompt.cwd,
+        timestamp: prompt.timestamp,
+        occurrences: [prompt],
+      });
     }
   }
 
@@ -117,7 +150,7 @@ async function readDirectory(path: string) {
 export class HistoryStore {
   private readonly cache = new Map<
     string,
-    { mtime: number; size: number; prompts: Prompt[] }
+    { mtime: number; size: number; prompts: PromptOccurrence[] }
   >();
 
   async load(
@@ -161,7 +194,7 @@ export class HistoryStore {
       }
     }
 
-    const prompts: Prompt[] = [];
+    const prompts: PromptOccurrence[] = [];
 
     for (const file of files) {
       signal.throwIfAborted();
@@ -177,7 +210,7 @@ export class HistoryStore {
             : {
                 mtime: info.mtimeMs,
                 size: info.size,
-                prompts: parseSession(await readFile(file, { signal })),
+                prompts: parseSession(await readFile(file, { signal }), file),
               };
 
         this.cache.set(file, entry);
