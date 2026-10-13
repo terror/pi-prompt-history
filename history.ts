@@ -120,7 +120,12 @@ export class HistoryStore {
     { mtime: number; size: number; prompts: Prompt[] }
   >();
 
-  async load(root: string, currentDir: string, signal: AbortSignal) {
+  async load(
+    root: string,
+    currentDir: string,
+    currentFile: string | undefined,
+    signal: AbortSignal
+  ) {
     signal.throwIfAborted();
 
     const directories = new Set([root, currentDir]);
@@ -134,6 +139,10 @@ export class HistoryStore {
       try {
         for (const entry of await readDirectory(directory)) {
           const path = join(directory, entry.name);
+
+          if (path === currentFile) {
+            continue;
+          }
 
           if (
             entry.name.endsWith('.jsonl') &&
