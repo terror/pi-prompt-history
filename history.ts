@@ -90,10 +90,12 @@ export function uniquePrompts(prompts: Prompt[]): Prompt[] {
   const unique = new Map<string, Prompt>();
 
   for (const prompt of prompts) {
-    const previous = unique.get(prompt.text);
+    const key = JSON.stringify([prompt.text, prompt.cwd]);
+
+    const previous = unique.get(key);
 
     if (!previous || prompt.timestamp > previous.timestamp) {
-      unique.set(prompt.text, prompt);
+      unique.set(key, prompt);
     }
   }
 
