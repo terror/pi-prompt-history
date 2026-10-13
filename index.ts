@@ -43,6 +43,7 @@ export default function (pi: ExtensionAPI) {
           .load(
             join(getAgentDir(), 'sessions'),
             ctx.sessionManager.getSessionDir(),
+            ctx.sessionManager.getSessionFile(),
             loader.signal
           )
           .then((result) => {
