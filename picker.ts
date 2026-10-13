@@ -88,6 +88,9 @@ export class HistoryPicker implements Component, Focusable {
       }
     );
 
+    this.list.onSelect = (item) =>
+      this.done(this.matches[Number(item.value)].text);
+    this.list.onCancel = () => this.done(undefined);
     this.list.setSelectedIndex(index);
   }
 
@@ -101,27 +104,14 @@ export class HistoryPicker implements Component, Focusable {
     const index = this.selectedIndex();
     const count = this.matches.length;
 
-    if (kb.matches(data, 'tui.select.cancel')) {
-      this.done(undefined);
-      return;
-    }
-
-    if (kb.matches(data, 'tui.select.confirm')) {
-      if (count) {
-        this.done(this.matches[index].text);
-      }
-
-      return;
-    }
-
-    if (kb.matches(data, 'tui.select.up')) {
-      if (count) {
-        this.list.setSelectedIndex((index + count - 1) % count);
-      }
-    } else if (
-      kb.matches(data, 'tui.select.down') ||
-      matchesKey(data, Key.ctrl('r'))
+    if (
+      kb.matches(data, 'tui.select.cancel') ||
+      kb.matches(data, 'tui.select.confirm') ||
+      kb.matches(data, 'tui.select.up') ||
+      kb.matches(data, 'tui.select.down')
     ) {
+      this.list.handleInput(data);
+    } else if (matchesKey(data, Key.ctrl('r'))) {
       if (count) this.list.setSelectedIndex((index + 1) % count);
     } else if (kb.matches(data, 'tui.select.pageUp')) {
       this.list.setSelectedIndex(index - this.maxVisible);
