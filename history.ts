@@ -82,7 +82,7 @@ function* parseEntries(content: Uint8Array): Generator<FileEntry> {
   }
 }
 
-export function parseSession(content: Uint8Array): Prompt[] {
+function parseSession(content: Uint8Array): Prompt[] {
   return extractPrompts(parseEntries(content));
 }
 
