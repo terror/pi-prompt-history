@@ -4,7 +4,7 @@ import {
   type ExtensionContext,
   getAgentDir,
 } from '@earendil-works/pi-coding-agent';
-import { Key, isFocusable } from '@earendil-works/pi-tui';
+import { Key } from '@earendil-works/pi-tui';
 import { join } from 'node:path';
 
 import {
@@ -14,35 +14,6 @@ import {
   uniquePrompts,
 } from './history.ts';
 import { HistoryPicker } from './picker.ts';
-
-function aboveEditor<T>(
-  ctx: ExtensionContext,
-  factory: Parameters<typeof ctx.ui.custom<T>>[0]
-): Promise<T> {
-  return ctx.ui.custom<T>(
-    async (tui, theme, keybindings, done) => {
-      const component = await factory(tui, theme, keybindings, done);
-
-      ctx.ui.setWidget('prompt-history', () => component, {
-        placement: 'aboveEditor',
-      });
-
-      return {
-        get focused() {
-          return isFocusable(component) && component.focused;
-        },
-        set focused(value: boolean) {
-          if (isFocusable(component)) component.focused = value;
-        },
-        render: () => [],
-        invalidate: () => component.invalidate(),
-        handleInput: (data: string) => component.handleInput?.(data),
-        dispose: () => ctx.ui.setWidget('prompt-history', undefined),
-      };
-    },
-    { overlay: true }
-  );
-}
 
 export default function (pi: ExtensionAPI) {
   const store = new HistoryStore();
@@ -62,9 +33,9 @@ export default function (pi: ExtensionAPI) {
     open = true;
 
     try {
-      const history = await aboveEditor<
+      const history = await ctx.ui.custom<
         Awaited<ReturnType<HistoryStore['load']>> | Error | undefined
-      >(ctx, (tui, theme, _keybindings, done) => {
+      >((tui, theme, _keybindings, done) => {
         const loader = new BorderedLoader(
           tui,
           theme,
@@ -128,25 +99,14 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      await aboveEditor<void>(
-        ctx,
+      const selected = await ctx.ui.custom<string | undefined>(
         (tui, theme, keybindings, done) =>
-          new HistoryPicker(
-            tui,
-            theme,
-            keybindings,
-            prompts,
-            query,
-            (selected) => {
-              done();
-
-              if (selected !== undefined) {
-                ctx.ui.setEditorText(selected);
-                tui.requestRender();
-              }
-            }
-          )
+          new HistoryPicker(tui, theme, keybindings, prompts, query, done)
       );
+
+      if (selected !== undefined) {
+        ctx.ui.setEditorText(selected);
+      }
     } catch (error) {
       ctx.ui.notify(
         `Could not load prompt history: ${error instanceof Error ? error.message : String(error)}`,
