@@ -1,7 +1,7 @@
-import { readdir, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
-import { contentText } from "@earendil-works/pi-ai";
-import type { FileEntry } from "@earendil-works/pi-coding-agent";
+import { contentText } from '@earendil-works/pi-ai';
+import type { FileEntry } from '@earendil-works/pi-coding-agent';
+import { readFile, readdir, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 
 export interface Prompt {
   text: string;
@@ -10,7 +10,7 @@ export interface Prompt {
 }
 
 export function getPrompt(entry: FileEntry, cwd: string): Prompt | undefined {
-  if (entry.type !== "message" || entry.message.role !== "user") {
+  if (entry.type !== 'message' || entry.message.role !== 'user') {
     return;
   }
 
@@ -25,16 +25,16 @@ export function getPrompt(entry: FileEntry, cwd: string): Prompt | undefined {
 
 export function isSubagentSession(
   parentSession: string | undefined,
-  name: string | undefined,
+  name: string | undefined
 ): boolean {
-  return !!parentSession && /#[0-9a-f]{8}$/i.test(name ?? "");
+  return !!parentSession && /#[0-9a-f]{8}$/i.test(name ?? '');
 }
 
 export function parseSession(content: Uint8Array): Prompt[] {
-  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const decoder = new TextDecoder('utf-8', { fatal: true });
   const prompts: Prompt[] = [];
 
-  let cwd = "";
+  let cwd = '';
   let offset = 0;
   let parentSession: string | undefined;
 
@@ -48,13 +48,13 @@ export function parseSession(content: Uint8Array): Prompt[] {
     try {
       const entry = JSON.parse(decoder.decode(line)) as FileEntry;
 
-      if (entry.type === "session" && typeof entry.cwd === "string") {
+      if (entry.type === 'session' && typeof entry.cwd === 'string') {
         cwd = entry.cwd;
         parentSession = entry.parentSession;
       }
 
       if (
-        entry.type === "session_info" &&
+        entry.type === 'session_info' &&
         isSubagentSession(parentSession, entry.name)
       ) {
         return [];
@@ -91,7 +91,7 @@ async function readDirectory(path: string) {
   try {
     return await readdir(path, { withFileTypes: true });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return [];
     }
 
@@ -121,7 +121,7 @@ export class HistoryStore {
           const path = join(directory, entry.name);
 
           if (
-            entry.name.endsWith(".jsonl") &&
+            entry.name.endsWith('.jsonl') &&
             (entry.isFile() || entry.isSymbolicLink())
           ) {
             files.add(path);

@@ -1,29 +1,30 @@
-import { join } from "node:path";
 import {
   BorderedLoader,
   type ExtensionAPI,
   type ExtensionContext,
   getAgentDir,
-} from "@earendil-works/pi-coding-agent";
-import { isFocusable, Key } from "@earendil-works/pi-tui";
+} from '@earendil-works/pi-coding-agent';
+import { Key, isFocusable } from '@earendil-works/pi-tui';
+import { join } from 'node:path';
+
 import {
-  getPrompt,
   HistoryStore,
+  getPrompt,
   isSubagentSession,
   uniquePrompts,
-} from "./history.ts";
-import { HistoryPicker } from "./picker.ts";
+} from './history.ts';
+import { HistoryPicker } from './picker.ts';
 
 function aboveEditor<T>(
   ctx: ExtensionContext,
-  factory: Parameters<typeof ctx.ui.custom<T>>[0],
+  factory: Parameters<typeof ctx.ui.custom<T>>[0]
 ): Promise<T> {
   return ctx.ui.custom<T>(
     async (tui, theme, keybindings, done) => {
       const component = await factory(tui, theme, keybindings, done);
 
-      ctx.ui.setWidget("prompt-history", () => component, {
-        placement: "aboveEditor",
+      ctx.ui.setWidget('prompt-history', () => component, {
+        placement: 'aboveEditor',
       });
 
       return {
@@ -36,10 +37,10 @@ function aboveEditor<T>(
         render: () => [],
         invalidate: () => component.invalidate(),
         handleInput: (data: string) => component.handleInput?.(data),
-        dispose: () => ctx.ui.setWidget("prompt-history", undefined),
+        dispose: () => ctx.ui.setWidget('prompt-history', undefined),
       };
     },
-    { overlay: true },
+    { overlay: true }
   );
 }
 
@@ -49,8 +50,8 @@ export default function (pi: ExtensionAPI) {
   let open = false;
 
   async function showHistory(ctx: ExtensionContext, query: string) {
-    if (ctx.mode !== "tui") {
-      ctx.ui.notify("Prompt history requires interactive mode", "error");
+    if (ctx.mode !== 'tui') {
+      ctx.ui.notify('Prompt history requires interactive mode', 'error');
       return;
     }
 
@@ -62,21 +63,21 @@ export default function (pi: ExtensionAPI) {
 
     try {
       const history = await aboveEditor<
-        Awaited<ReturnType<HistoryStore["load"]>> | Error | undefined
+        Awaited<ReturnType<HistoryStore['load']>> | Error | undefined
       >(ctx, (tui, theme, _keybindings, done) => {
         const loader = new BorderedLoader(
           tui,
           theme,
-          "Loading prompt history…",
+          'Loading prompt history…'
         );
 
         loader.onAbort = () => done(undefined);
 
         store
           .load(
-            join(getAgentDir(), "sessions"),
+            join(getAgentDir(), 'sessions'),
             ctx.sessionManager.getSessionDir(),
-            loader.signal,
+            loader.signal
           )
           .then((result) => {
             if (!loader.signal.aborted) done(result);
@@ -100,7 +101,7 @@ export default function (pi: ExtensionAPI) {
       if (history.skipped) {
         ctx.ui.notify(
           `Prompt history skipped ${history.skipped} unreadable files or directories`,
-          "warning",
+          'warning'
         );
       }
 
@@ -109,8 +110,8 @@ export default function (pi: ExtensionAPI) {
 
       const subagent = entries.some(
         (entry) =>
-          entry.type === "session_info" &&
-          isSubagentSession(parentSession, entry.name),
+          entry.type === 'session_info' &&
+          isSubagentSession(parentSession, entry.name)
       );
 
       const current = subagent
@@ -123,7 +124,7 @@ export default function (pi: ExtensionAPI) {
       const prompts = uniquePrompts([...current, ...history.prompts]);
 
       if (!prompts.length) {
-        ctx.ui.notify("No prompt history found", "info");
+        ctx.ui.notify('No prompt history found', 'info');
         return;
       }
 
@@ -143,26 +144,26 @@ export default function (pi: ExtensionAPI) {
                 ctx.ui.setEditorText(selected);
                 tui.requestRender();
               }
-            },
-          ),
+            }
+          )
       );
     } catch (error) {
       ctx.ui.notify(
         `Could not load prompt history: ${error instanceof Error ? error.message : String(error)}`,
-        "error",
+        'error'
       );
     } finally {
       open = false;
     }
   }
 
-  pi.registerCommand("history", {
-    description: "Fuzzy-search prompts across all sessions",
+  pi.registerCommand('history', {
+    description: 'Fuzzy-search prompts across all sessions',
     handler: (args, ctx) => showHistory(ctx, args.trim()),
   });
 
-  pi.registerShortcut(Key.ctrl("r"), {
-    description: "Search global prompt history",
+  pi.registerShortcut(Key.ctrl('r'), {
+    description: 'Search global prompt history',
     handler: (ctx) => showHistory(ctx, ctx.ui.getEditorText()),
   });
 }
