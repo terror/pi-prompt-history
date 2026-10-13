@@ -188,9 +188,7 @@ export class HistoryPicker implements Component, Focusable {
     const previewRows = Math.min(6, rows - lines.length - 4);
 
     if (selected && previewRows > 0) {
-      const date = selected.timestamp
-        ? new Date(selected.timestamp).toLocaleString()
-        : 'Unknown date';
+      const date = new Date(selected.timestamp).toLocaleString();
 
       lines.push(
         '',
