@@ -75,10 +75,11 @@ export default function (pi: ExtensionAPI) {
         );
       }
 
-      const current = extractPrompts(
-        ctx.sessionManager.getEntries(),
-        ctx.sessionManager.getHeader()?.cwd
-      );
+      const current = extractPrompts(ctx.sessionManager.getEntries(), {
+        cwd: ctx.sessionManager.getHeader()?.cwd ?? '',
+        sessionId: ctx.sessionManager.getSessionId(),
+        sessionFile: ctx.sessionManager.getSessionFile(),
+      });
 
       const prompts = uniquePrompts([...current, ...history.prompts]);
 
