@@ -46,11 +46,14 @@ export default function (pi: ExtensionAPI) {
             loader.signal
           )
           .then((result) => {
-            if (!loader.signal.aborted) done(result);
+            if (!loader.signal.aborted) {
+              done(result);
+            }
           })
-          .catch((error) => {
-            if (!loader.signal.aborted)
+          .catch((error: unknown) => {
+            if (!loader.signal.aborted) {
               done(error instanceof Error ? error : new Error(String(error)));
+            }
           });
 
         return loader;
@@ -66,7 +69,7 @@ export default function (pi: ExtensionAPI) {
 
       if (history.skipped) {
         ctx.ui.notify(
-          `Prompt history skipped ${history.skipped} unreadable files or directories`,
+          `Prompt history skipped ${String(history.skipped)} unreadable files or directories`,
           'warning'
         );
       }

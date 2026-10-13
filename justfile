@@ -2,10 +2,18 @@ set dotenv-load
 
 export EDITOR := 'nvim'
 
+alias c := check
 alias f := fmt
+alias l := lint
 
 default:
   just --list
 
+check:
+  bun run check
+
 fmt:
-  prettier --write .
+  bun run format
+
+lint:
+  bun run lint
