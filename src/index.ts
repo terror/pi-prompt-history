@@ -87,14 +87,24 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      const selected = await ctx.ui.custom<string | undefined>(
+      await ctx.ui.custom<undefined>(
         (tui, theme, keybindings, done) =>
-          new HistoryPicker(tui, theme, keybindings, prompts, query, done)
-      );
+          new HistoryPicker(
+            tui,
+            theme,
+            keybindings,
+            prompts,
+            query,
+            (selected) => {
+              done(undefined);
 
-      if (selected !== undefined) {
-        ctx.ui.setEditorText(selected);
-      }
+              if (selected !== undefined) {
+                ctx.ui.setEditorText(selected);
+                tui.requestRender();
+              }
+            }
+          )
+      );
     } catch (error) {
       ctx.ui.notify(
         `Could not load prompt history: ${error instanceof Error ? error.message : String(error)}`,
