@@ -7,12 +7,7 @@ import {
 import { Key } from '@earendil-works/pi-tui';
 import { join } from 'node:path';
 
-import {
-  HistoryStore,
-  getPrompt,
-  isSubagentSession,
-  uniquePrompts,
-} from './history.ts';
+import { HistoryStore, extractPrompts, uniquePrompts } from './history.ts';
 import { HistoryPicker } from './picker.ts';
 
 export default function (pi: ExtensionAPI) {
@@ -76,21 +71,11 @@ export default function (pi: ExtensionAPI) {
         );
       }
 
-      const entries = ctx.sessionManager.getEntries();
-      const parentSession = ctx.sessionManager.getHeader()?.parentSession;
-
-      const subagent = entries.some(
-        (entry) =>
-          entry.type === 'session_info' &&
-          isSubagentSession(parentSession, entry.name)
+      const current = extractPrompts(
+        ctx.sessionManager.getEntries(),
+        ctx.sessionManager.getCwd(),
+        ctx.sessionManager.getHeader()?.parentSession
       );
-
-      const current = subagent
-        ? []
-        : entries.flatMap((entry) => {
-            const prompt = getPrompt(entry, ctx.sessionManager.getCwd());
-            return prompt ? [prompt] : [];
-          });
 
       const prompts = uniquePrompts([...current, ...history.prompts]);
 

@@ -9,8 +9,12 @@ export interface Prompt {
   timestamp: number;
 }
 
-export function getPrompt(entry: FileEntry, cwd: string): Prompt | undefined {
-  if (entry.type !== 'message' || entry.message.role !== 'user') {
+function getPrompt(entry: FileEntry, cwd: string): Prompt | undefined {
+  if (
+    entry.type !== 'message' ||
+    entry.message.role !== 'user' ||
+    !Number.isFinite(entry.message.timestamp)
+  ) {
     return;
   }
 
@@ -23,31 +27,15 @@ export function getPrompt(entry: FileEntry, cwd: string): Prompt | undefined {
   return { text, cwd, timestamp: entry.message.timestamp };
 }
 
-export function isSubagentSession(
-  parentSession: string | undefined,
-  name: string | undefined
-): boolean {
-  return !!parentSession && /#[0-9a-f]{8}$/i.test(name ?? '');
-}
-
-export function parseSession(content: Uint8Array): Prompt[] {
-  const decoder = new TextDecoder('utf-8', { fatal: true });
+export function extractPrompts(
+  entries: Iterable<FileEntry>,
+  cwd = '',
+  parentSession?: string
+): Prompt[] {
   const prompts: Prompt[] = [];
 
-  let cwd = '';
-  let offset = 0;
-  let parentSession: string | undefined;
-
-  while (offset < content.length) {
-    const newline = content.indexOf(0x0a, offset);
-    const end = newline === -1 ? content.length : newline;
-    const line = content.subarray(offset, end);
-
-    offset = end + 1;
-
+  for (const entry of entries) {
     try {
-      const entry = JSON.parse(decoder.decode(line)) as FileEntry;
-
       if (entry.type === 'session' && typeof entry.cwd === 'string') {
         cwd = entry.cwd;
         parentSession = entry.parentSession;
@@ -55,7 +43,8 @@ export function parseSession(content: Uint8Array): Prompt[] {
 
       if (
         entry.type === 'session_info' &&
-        isSubagentSession(parentSession, entry.name)
+        parentSession &&
+        /#[0-9a-f]{8}$/i.test(entry.name ?? '')
       ) {
         return [];
       }
@@ -71,6 +60,30 @@ export function parseSession(content: Uint8Array): Prompt[] {
   }
 
   return prompts;
+}
+
+function* parseEntries(content: Uint8Array): Generator<FileEntry> {
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+
+  let offset = 0;
+
+  while (offset < content.length) {
+    const newline = content.indexOf(0x0a, offset);
+    const end = newline === -1 ? content.length : newline;
+    const line = content.subarray(offset, end);
+
+    offset = end + 1;
+
+    try {
+      yield JSON.parse(decoder.decode(line)) as FileEntry;
+    } catch {
+      continue;
+    }
+  }
+}
+
+export function parseSession(content: Uint8Array): Prompt[] {
+  return extractPrompts(parseEntries(content));
 }
 
 export function uniquePrompts(prompts: Prompt[]): Prompt[] {
