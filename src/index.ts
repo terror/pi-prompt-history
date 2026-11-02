@@ -23,6 +23,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on('session_shutdown', () => {
     lifecycle.abort();
+
     close?.();
   });
 
@@ -52,6 +53,7 @@ export default function (pi: ExtensionAPI) {
         const signal = AbortSignal.any([loader.signal, lifecycle.signal]);
 
         close = () => done(undefined);
+
         loader.onAbort = close;
 
         store
@@ -119,6 +121,7 @@ export default function (pi: ExtensionAPI) {
 
             if (selected !== undefined && !isShutdown()) {
               ctx.ui.setEditorText(selected);
+
               tui.requestRender();
             }
           }
@@ -133,6 +136,7 @@ export default function (pi: ExtensionAPI) {
       }
     } finally {
       close = undefined;
+
       open = false;
     }
   }

@@ -20,6 +20,7 @@ function match(query: string, text: string): number | undefined {
 
     if (previous === position - 1) {
       consecutive++;
+
       score -= consecutive * 5;
     } else {
       consecutive = 0;
@@ -34,6 +35,7 @@ function match(query: string, text: string): number | undefined {
     }
 
     score += position * 0.1;
+
     previous = position;
   }
 

@@ -155,6 +155,7 @@ async function readPrompts(path: string, size: number, signal: AbortSignal) {
           : fragment;
 
         fragments.length = 0;
+
         offset = newline + 1;
 
         collector.add(parse(line));
@@ -191,6 +192,7 @@ export function uniquePrompts(prompts: Prompt[]): Prompt[] {
       const entry = { ...prompt };
 
       project.set(prompt.text, entry);
+
       unique.push(entry);
     }
   }
@@ -224,7 +226,9 @@ async function mapConcurrent<T, U>(
     async () => {
       for (const [index, value] of entries) {
         signal.throwIfAborted();
+
         results[index] = await fn(value);
+
         signal.throwIfAborted();
       }
     }
@@ -299,6 +303,7 @@ export class HistoryStore {
             !directories.has(path)
           ) {
             directories.add(path);
+
             next.push(path);
           }
         }
@@ -335,7 +340,9 @@ export class HistoryStore {
         return entry.prompts;
       } catch {
         signal.throwIfAborted();
+
         this.cache.delete(file);
+
         skipped++;
 
         return [];

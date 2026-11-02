@@ -117,46 +117,6 @@
       {
         "blankLine": "always",
         "prev": "*",
-        "next": [
-          "const",
-          "let",
-          "block-like",
-          "function",
-          "class",
-          "interface",
-          "type",
-          "return",
-          "throw",
-          "break",
-          "continue"
-        ]
-      },
-      {
-        "blankLine": "always",
-        "prev": [
-          "const",
-          "let",
-          "block-like",
-          "function",
-          "class",
-          "interface",
-          "type"
-        ],
-        "next": "*"
-      },
-      {
-        "blankLine": "always",
-        "prev": "*",
-        "next": "multiline-expression"
-      },
-      {
-        "blankLine": "always",
-        "prev": "multiline-expression",
-        "next": "*"
-      },
-      {
-        "blankLine": "always",
-        "prev": "import",
         "next": "*"
       },
       {

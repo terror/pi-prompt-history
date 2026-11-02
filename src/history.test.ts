@@ -71,7 +71,9 @@ test.each(['foo/bar', 'baz'])(
     }
 
     await session(currentFile);
+
     await session(join(root, 'foo.txt'));
+
     await session(join(root, 'bar', 'baz', 'foo.jsonl'));
 
     const result = await new HistoryStore().load(
@@ -149,7 +151,9 @@ test('ignores missing directories and reports unreadable paths', async () => {
   });
 
   await session(file);
+
   await writeFile(currentDir, 'foo');
+
   await symlink(join(directory, 'baz'), join(root, 'bar.jsonl'));
 
   expect(await store.load(root, currentDir, undefined, signal)).toStrictEqual({
@@ -181,11 +185,13 @@ test('reloads changed files and removes deleted prompts', async () => {
   const store = new HistoryStore();
 
   await session(file);
+
   await utimes(file, 1, 1);
 
   expect(await load(store)).toStrictEqual({ prompts: [prompt], skipped: 0 });
 
   await session(file, [message('bar')]);
+
   await utimes(file, 1, 2);
 
   expect(await load(store)).toStrictEqual({
@@ -194,6 +200,7 @@ test('reloads changed files and removes deleted prompts', async () => {
   });
 
   await appendFile(file, jsonl(message('baz', 2)));
+
   await utimes(file, 1, 2);
 
   expect(await load(store)).toStrictEqual({
@@ -220,6 +227,7 @@ test.each<[string, string | Uint8Array]>([
   await session(file);
 
   await appendFile(file, invalid);
+
   await appendFile(file, `\n${JSON.stringify(message('bar', 2))}`);
 
   expect(await load()).toStrictEqual({
