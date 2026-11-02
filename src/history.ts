@@ -1,4 +1,4 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { open, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export interface Prompt {
@@ -39,10 +39,13 @@ function promptText(content: unknown): string {
   return text.join('\n');
 }
 
-export function extractPrompts(entries: Iterable<unknown>, cwd = ''): Prompt[] {
+export async function extractPrompts(
+  entries: Iterable<unknown> | AsyncIterable<unknown>,
+  cwd = ''
+): Promise<Prompt[]> {
   const prompts: Prompt[] = [];
 
-  for (const entry of entries) {
+  for await (const entry of entries) {
     if (!isRecord(entry)) {
       continue;
     }
@@ -83,23 +86,65 @@ export function extractPrompts(entries: Iterable<unknown>, cwd = ''): Prompt[] {
   return prompts;
 }
 
-function* parseEntries(content: Uint8Array) {
+async function* parseEntries(path: string, signal: AbortSignal) {
   const decoder = new TextDecoder('utf-8', { fatal: true });
 
-  let offset = 0;
-
-  while (offset < content.length) {
-    const newline = content.indexOf(0x0a, offset);
-    const end = newline === -1 ? content.length : newline;
-    const line = content.subarray(offset, end);
-
-    offset = end + 1;
-
+  function parse(content: Uint8Array): unknown {
     try {
-      yield JSON.parse(decoder.decode(line)) as unknown;
+      return JSON.parse(decoder.decode(content)) as unknown;
     } catch {
-      continue;
+      return undefined;
     }
+  }
+
+  const file = await open(path, 'r');
+
+  try {
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    const fragments: Uint8Array[] = [];
+
+    for (;;) {
+      signal.throwIfAborted();
+
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, null);
+
+      signal.throwIfAborted();
+
+      if (!bytesRead) {
+        if (fragments.length) {
+          yield parse(Buffer.concat(fragments));
+        }
+
+        return;
+      }
+
+      const content = buffer.subarray(0, bytesRead);
+
+      let offset = 0;
+
+      while (offset < content.length) {
+        signal.throwIfAborted();
+
+        const newline = content.indexOf(0x0a, offset);
+
+        if (newline === -1) {
+          fragments.push(Buffer.from(content.subarray(offset)));
+          break;
+        }
+
+        const fragment = content.subarray(offset, newline);
+        const line = fragments.length
+          ? Buffer.concat([...fragments, fragment])
+          : fragment;
+
+        fragments.length = 0;
+        offset = newline + 1;
+
+        yield parse(line);
+      }
+    }
+  } finally {
+    await file.close();
   }
 }
 
@@ -237,9 +282,7 @@ export class HistoryStore {
             : {
                 mtime: info.mtimeMs,
                 size: info.size,
-                prompts: extractPrompts(
-                  parseEntries(await readFile(file, { signal }))
-                ),
+                prompts: await extractPrompts(parseEntries(file, signal)),
               };
 
         signal.throwIfAborted();
