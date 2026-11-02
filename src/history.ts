@@ -39,23 +39,22 @@ function promptText(content: unknown): string {
   return text.join('\n');
 }
 
-export async function extractPrompts(
-  entries: Iterable<unknown> | AsyncIterable<unknown>,
-  cwd = ''
-): Promise<Prompt[]> {
-  const prompts: Prompt[] = [];
+class PromptCollector {
+  readonly prompts: Prompt[] = [];
 
-  for await (const entry of entries) {
+  constructor(private cwd = '') {}
+
+  add(entry: unknown) {
     if (!isRecord(entry)) {
-      continue;
+      return;
     }
 
     if (entry.type === 'session') {
       if (typeof entry.cwd === 'string') {
-        cwd = entry.cwd;
+        this.cwd = entry.cwd;
       }
 
-      continue;
+      return;
     }
 
     const message = entry.message;
@@ -67,26 +66,36 @@ export async function extractPrompts(
       typeof message.timestamp !== 'number' ||
       !Number.isFinite(message.timestamp)
     ) {
-      continue;
+      return;
     }
 
     const text = promptText(message.content);
 
     if (!text.trim()) {
-      continue;
+      return;
     }
 
-    prompts.push({
+    this.prompts.push({
       text,
-      cwd,
+      cwd: this.cwd,
       timestamp: message.timestamp,
     });
   }
-
-  return prompts;
 }
 
-async function* parseEntries(path: string, size: number, signal: AbortSignal) {
+export function extractPrompts(entries: Iterable<unknown>, cwd = ''): Prompt[] {
+  const collector = new PromptCollector(cwd);
+
+  for (const entry of entries) {
+    collector.add(entry);
+  }
+
+  return collector.prompts;
+}
+
+async function readPrompts(path: string, size: number, signal: AbortSignal) {
+  const collector = new PromptCollector();
+
   const decoder = new TextDecoder('utf-8', { fatal: true });
 
   function parse(content: Uint8Array): unknown {
@@ -148,18 +157,20 @@ async function* parseEntries(path: string, size: number, signal: AbortSignal) {
         fragments.length = 0;
         offset = newline + 1;
 
-        yield parse(line);
+        collector.add(parse(line));
       }
     }
 
     signal.throwIfAborted();
 
     if (fragments.length) {
-      yield parse(Buffer.concat(fragments));
+      collector.add(parse(Buffer.concat(fragments)));
     }
   } finally {
     await file.close();
   }
+
+  return collector.prompts;
 }
 
 export function uniquePrompts(prompts: Prompt[]): Prompt[] {
@@ -314,9 +325,7 @@ export class HistoryStore {
             : {
                 mtime: info.mtimeMs,
                 size: info.size,
-                prompts: await extractPrompts(
-                  parseEntries(file, info.size, signal)
-                ),
+                prompts: await readPrompts(file, info.size, signal),
               };
 
         signal.throwIfAborted();

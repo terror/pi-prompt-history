@@ -76,7 +76,7 @@ export default function (pi: ExtensionAPI) {
         );
       }
 
-      const current = await extractPrompts(
+      const current = extractPrompts(
         ctx.sessionManager.getEntries(),
         ctx.sessionManager.getHeader()?.cwd ?? ''
       );
