@@ -39,18 +39,25 @@ function previewLines(text: string, width: number, rows: number): string[] {
 }
 
 export class HistoryPicker implements Component, Focusable {
+  /** Search field that receives focus and query input. */
   private readonly input: Input;
 
+  /** Display labels cached as prompts enter the visible list. */
   private readonly labels = new Map<Prompt, string>();
 
+  /** Prompt text and project paths combined and cached on the first search. */
   private readonly searchText = new Map<Prompt, string>();
 
+  /** Prompts matching the current query, in display order. */
   private matches: Prompt[] = [];
 
+  /** Index of the highlighted prompt within the current matches. */
   private selectedIndex = 0;
 
+  /** Number of list rows that fit in the current terminal layout. */
   private maxVisible = 8;
 
+  /** Preview cached for the selected prompt, terminal width, and row limit. */
   private preview:
     | {
         prompt: Prompt;
