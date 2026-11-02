@@ -3,35 +3,17 @@ import type { FileEntry } from '@earendil-works/pi-coding-agent';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export interface PromptOccurrence {
+export interface Prompt {
   text: string;
   cwd: string;
   timestamp: number;
-  sessionId: string | undefined;
-  sessionFile: string | undefined;
-  entryId: string | undefined;
-}
-
-export interface PromptGroup {
-  text: string;
-  cwd: string;
-  timestamp: number;
-  occurrences: PromptOccurrence[];
 }
 
 export function extractPrompts(
   entries: Iterable<FileEntry>,
-  {
-    cwd = '',
-    sessionId,
-    sessionFile,
-  }: {
-    cwd?: string;
-    sessionId?: string | undefined;
-    sessionFile?: string | undefined;
-  } = {}
-): PromptOccurrence[] {
-  const prompts: PromptOccurrence[] = [];
+  cwd = ''
+): Prompt[] {
+  const prompts: Prompt[] = [];
 
   for (const entry of entries) {
     if (entry.type === 'session') {
@@ -39,7 +21,6 @@ export function extractPrompts(
         cwd = entry.cwd;
       }
 
-      sessionId = typeof entry.id === 'string' ? entry.id : undefined;
       continue;
     }
 
@@ -61,9 +42,6 @@ export function extractPrompts(
       text,
       cwd,
       timestamp: entry.message.timestamp,
-      sessionId,
-      sessionFile,
-      entryId: typeof entry.id === 'string' ? entry.id : undefined,
     });
   }
 
@@ -104,15 +82,8 @@ function* parseEntries(content: Uint8Array): Generator<FileEntry> {
   }
 }
 
-function parseSession(
-  content: Uint8Array,
-  sessionFile: string
-): PromptOccurrence[] {
-  return extractPrompts(parseEntries(content), { sessionFile });
-}
-
-export function uniquePrompts(prompts: PromptOccurrence[]): PromptGroup[] {
-  const unique = new Map<string, PromptGroup>();
+export function uniquePrompts(prompts: Prompt[]): Prompt[] {
+  const unique = new Map<string, Prompt>();
 
   for (const prompt of prompts) {
     const key = JSON.stringify([prompt.text, prompt.cwd]);
@@ -120,15 +91,9 @@ export function uniquePrompts(prompts: PromptOccurrence[]): PromptGroup[] {
     const previous = unique.get(key);
 
     if (previous) {
-      previous.occurrences.push(prompt);
       previous.timestamp = Math.max(previous.timestamp, prompt.timestamp);
     } else {
-      unique.set(key, {
-        text: prompt.text,
-        cwd: prompt.cwd,
-        timestamp: prompt.timestamp,
-        occurrences: [prompt],
-      });
+      unique.set(key, { ...prompt });
     }
   }
 
@@ -150,7 +115,7 @@ async function readDirectory(path: string) {
 export class HistoryStore {
   private readonly cache = new Map<
     string,
-    { mtime: number; size: number; prompts: PromptOccurrence[] }
+    { mtime: number; size: number; prompts: Prompt[] }
   >();
 
   async load(
@@ -194,7 +159,7 @@ export class HistoryStore {
       }
     }
 
-    const prompts: PromptOccurrence[] = [];
+    const prompts: Prompt[] = [];
 
     for (const file of files) {
       signal.throwIfAborted();
@@ -210,7 +175,9 @@ export class HistoryStore {
             : {
                 mtime: info.mtimeMs,
                 size: info.size,
-                prompts: parseSession(await readFile(file, { signal }), file),
+                prompts: extractPrompts(
+                  parseEntries(await readFile(file, { signal }))
+                ),
               };
 
         this.cache.set(file, entry);

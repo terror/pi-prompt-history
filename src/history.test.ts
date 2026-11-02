@@ -22,9 +22,6 @@ const prompt = {
   text: 'foo',
   cwd: 'foo',
   timestamp: 1,
-  sessionId: 'foo',
-  sessionFile: undefined,
-  entryId: 'bar',
 };
 
 beforeEach(async () => {
@@ -87,9 +84,8 @@ test.each(['foo/bar', 'baz'])(
     result.prompts.sort((a, b) => a.timestamp - b.timestamp);
 
     expect(result).toStrictEqual({
-      prompts: files.map((sessionFile, timestamp) => ({
+      prompts: files.map((_file, timestamp) => ({
         ...prompt,
-        sessionFile,
         timestamp,
       })),
       skipped: 0,
@@ -115,12 +111,12 @@ test.each<[unknown, string | undefined]>([
   await session(file, [message(content)]);
 
   expect(await load()).toStrictEqual({
-    prompts: text === undefined ? [] : [{ ...prompt, text, sessionFile: file }],
+    prompts: text === undefined ? [] : [{ ...prompt, text }],
     skipped: 0,
   });
 });
 
-test('groups by text and project, preserving occurrences and newest timestamps', () => {
+test('groups by text and project, preserving newest timestamps', () => {
   const foo = { ...prompt, timestamp: 2 };
   const bar = { ...prompt, timestamp: 1 };
   const baz = { ...prompt, timestamp: 3 };
@@ -128,9 +124,9 @@ test('groups by text and project, preserving occurrences and newest timestamps',
   const bob = { ...prompt, text: 'bar', timestamp: 5 };
 
   expect(uniquePrompts([foo, bar, baz, qux, bob])).toStrictEqual([
-    { text: 'bar', cwd: 'foo', timestamp: 5, occurrences: [bob] },
-    { text: 'foo', cwd: 'bar', timestamp: 4, occurrences: [qux] },
-    { text: 'foo', cwd: 'foo', timestamp: 3, occurrences: [foo, bar, baz] },
+    bob,
+    qux,
+    baz,
   ]);
 });
 
@@ -151,7 +147,7 @@ test('ignores missing directories and reports unreadable paths', async () => {
   await symlink(join(directory, 'baz'), join(root, 'bar.jsonl'));
 
   expect(await store.load(root, currentDir, undefined, signal)).toStrictEqual({
-    prompts: [{ ...prompt, sessionFile: file }],
+    prompts: [prompt],
     skipped: 2,
   });
 });
@@ -176,20 +172,18 @@ test('propagates cancellation during loading', async () => {
 test('reloads changed files and removes deleted prompts', async () => {
   const file = join(directory, 'foo.jsonl');
 
-  const foo = { ...prompt, sessionFile: file };
-
   const store = new HistoryStore();
 
   await session(file);
   await utimes(file, 1, 1);
 
-  expect(await load(store)).toStrictEqual({ prompts: [foo], skipped: 0 });
+  expect(await load(store)).toStrictEqual({ prompts: [prompt], skipped: 0 });
 
   await session(file, [message('bar')]);
   await utimes(file, 1, 2);
 
   expect(await load(store)).toStrictEqual({
-    prompts: [{ ...foo, text: 'bar' }],
+    prompts: [{ ...prompt, text: 'bar' }],
     skipped: 0,
   });
 
@@ -198,8 +192,8 @@ test('reloads changed files and removes deleted prompts', async () => {
 
   expect(await load(store)).toStrictEqual({
     prompts: [
-      { ...foo, text: 'bar' },
-      { ...foo, text: 'baz', timestamp: 2 },
+      { ...prompt, text: 'bar' },
+      { ...prompt, text: 'baz', timestamp: 2 },
     ],
     skipped: 0,
   });
@@ -223,10 +217,7 @@ test.each<[string, string | Uint8Array]>([
   await appendFile(file, `\n${JSON.stringify(message('bar', 2))}`);
 
   expect(await load()).toStrictEqual({
-    prompts: [
-      { ...prompt, sessionFile: file },
-      { ...prompt, text: 'bar', timestamp: 2, sessionFile: file },
-    ],
+    prompts: [prompt, { ...prompt, text: 'bar', timestamp: 2 }],
     skipped: 0,
   });
 });

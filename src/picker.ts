@@ -16,7 +16,7 @@ import {
   wrapTextWithAnsi,
 } from '@earendil-works/pi-tui';
 
-import type { PromptGroup } from './history.ts';
+import type { Prompt } from './history.ts';
 
 function displayText(text: string): string {
   return stripTerminalSequences(text)
@@ -25,7 +25,7 @@ function displayText(text: string): string {
     .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
 }
 
-interface DisplayPrompt extends PromptGroup {
+interface DisplayPrompt extends Prompt {
   label: string;
   searchText: string;
   displayText: string;
@@ -45,7 +45,7 @@ export class HistoryPicker implements Component, Focusable {
     private readonly tui: TUI,
     private readonly theme: Theme,
     private readonly keybindings: KeybindingsManager,
-    prompts: PromptGroup[],
+    prompts: Prompt[],
     query: string,
     private readonly done: (value: string | undefined) => void
   ) {
