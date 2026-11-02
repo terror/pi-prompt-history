@@ -9,7 +9,6 @@ import {
   Input,
   Key,
   type TUI,
-  fuzzyFilter,
   matchesKey,
   truncateToWidth,
   visibleWidth,
@@ -18,6 +17,7 @@ import {
 import { basename } from 'node:path';
 
 import type { Prompt } from './history.ts';
+import { searchPrompts } from './search.ts';
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
@@ -173,17 +173,10 @@ export class HistoryPicker implements Component, Focusable {
   }
 
   private filter() {
-    this.matches = fuzzyFilter(
+    this.matches = searchPrompts(
       this.prompts,
       this.input.getValue(),
-      (prompt) => {
-        const text =
-          this.searchText.get(prompt) ?? `${prompt.text}\n${prompt.cwd}`;
-
-        this.searchText.set(prompt, text);
-
-        return text;
-      }
+      this.searchText
     );
 
     this.selectedIndex = 0;
