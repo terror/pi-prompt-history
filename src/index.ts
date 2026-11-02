@@ -9,6 +9,7 @@ import { join } from 'node:path';
 
 import { HistoryStore, extractPrompts, uniquePrompts } from './history.ts';
 import { HistoryPicker } from './picker.ts';
+import { sanitizeText } from './text.ts';
 
 const store = new HistoryStore();
 
@@ -129,7 +130,7 @@ export default function (pi: ExtensionAPI) {
             done(undefined);
 
             if (selected !== undefined && !isShutdown()) {
-              ctx.ui.setEditorText(selected);
+              ctx.ui.setEditorText(sanitizeText(selected).text);
 
               tui.requestRender();
             }

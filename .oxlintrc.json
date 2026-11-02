@@ -296,7 +296,7 @@
       }
     },
     {
-      "files": ["src/picker.ts"],
+      "files": ["src/picker.ts", "src/text.ts"],
       "rules": {
         "no-control-regex": "off"
       }

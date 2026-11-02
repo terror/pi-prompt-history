@@ -18,77 +18,26 @@ import { basename } from 'node:path';
 
 import type { Prompt } from './history.ts';
 import { searchPrompts } from './search.ts';
+import { sanitizeText } from './text.ts';
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 function displayText(text: string, limit = 16 * 1024) {
   const prefix = text.slice(0, limit);
 
-  let display = '';
+  const sanitized = sanitizeText(prefix);
 
-  let truncated = prefix.length < text.length;
-
-  for (let index = 0; index < prefix.length; index++) {
-    const character = prefix.charAt(index);
-
-    if (character !== '\x1b') {
-      display += character;
-
-      continue;
-    }
-
-    const introducer = prefix.charAt(++index);
-
-    if (!introducer) {
-      truncated = true;
-
-      break;
-    }
-
-    if (introducer === '[') {
-      index++;
-
-      while (index < prefix.length && !/[@-~]/.test(prefix.charAt(index))) {
-        index++;
-      }
-    } else if (']PX^_'.includes(introducer)) {
-      index++;
-
-      while (
-        index < prefix.length &&
-        prefix.charAt(index) !== '\x07' &&
-        !(prefix.charAt(index) === '\x1b' && prefix.charAt(index + 1) === '\\')
-      ) {
-        index++;
-      }
-
-      if (prefix.charAt(index) === '\x1b') {
-        index++;
-      }
-    } else {
-      while (index < prefix.length && /[ -/]/.test(prefix.charAt(index))) {
-        index++;
-      }
-    }
-
-    if (index >= prefix.length) {
-      truncated = true;
-    }
-  }
-
-  const sanitized = display
-    .replace(/\r\n?/g, '\n')
-    .replace(/\t/g, '  ')
-    .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '')
-    .replace(/[\ud800-\udfff]/gu, '');
+  const display = sanitized.text.replace(/\r\n?/g, '\n').replace(/\t/g, '  ');
 
   const end =
     prefix.length < text.length
-      ? (graphemes.segment(sanitized).containing(sanitized.length - 1)?.index ??
-        0)
-      : sanitized.length;
+      ? (graphemes.segment(display).containing(display.length - 1)?.index ?? 0)
+      : display.length;
 
-  return { text: sanitized.slice(0, end), truncated };
+  return {
+    text: display.slice(0, end),
+    truncated: prefix.length < text.length || sanitized.truncated,
+  };
 }
 
 function labelText(text: string): string {
