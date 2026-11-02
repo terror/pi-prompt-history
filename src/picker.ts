@@ -7,7 +7,6 @@ import {
   type Focusable,
   Input,
   Key,
-  SelectList,
   type TUI,
   fuzzyFilter,
   matchesKey,
@@ -35,8 +34,8 @@ interface DisplayPrompt extends Prompt {
 export class HistoryPicker implements Component, Focusable {
   private readonly input: Input;
   private readonly prompts: DisplayPrompt[];
-  private list!: SelectList;
   private matches: DisplayPrompt[] = [];
+  private selectedIndex = 0;
   private maxVisible = 8;
   private preview:
     { prompt: DisplayPrompt; width: number; lines: string[] } | undefined;
@@ -91,56 +90,37 @@ export class HistoryPicker implements Component, Focusable {
       this.input.getValue(),
       (prompt) => prompt.searchText
     );
-    this.createList();
-  }
-
-  private createList(index = 0) {
-    this.list = new SelectList(
-      this.matches.map((prompt, index) => ({
-        value: String(index),
-        label: prompt.label,
-      })),
-      this.maxVisible,
-      {
-        selectedPrefix: (text) => this.theme.fg('accent', text),
-        selectedText: (text) => this.theme.fg('accent', text),
-        description: (text) => this.theme.fg('muted', text),
-        scrollInfo: (text) => this.theme.fg('dim', text),
-        noMatch: (text) => this.theme.fg('warning', text),
-      }
-    );
-
-    this.list.onSelect = (item) =>
-      this.done(this.matches[Number(item.value)]?.text);
-    this.list.onCancel = () => this.done(undefined);
-    this.list.setSelectedIndex(index);
-  }
-
-  private selectedIndex(): number {
-    return Number(this.list.getSelectedItem()?.value ?? 0);
+    this.selectedIndex = 0;
   }
 
   handleInput(data: string) {
     const kb = this.keybindings;
 
-    const index = this.selectedIndex();
+    const index = this.selectedIndex;
     const count = this.matches.length;
 
-    if (
-      kb.matches(data, 'tui.select.cancel') ||
-      kb.matches(data, 'tui.select.confirm') ||
-      kb.matches(data, 'tui.select.up') ||
-      kb.matches(data, 'tui.select.down')
-    ) {
-      this.list.handleInput(data);
-    } else if (matchesKey(data, Key.ctrl('r'))) {
-      if (count) {
-        this.list.setSelectedIndex((index + 1) % count);
+    if (kb.matches(data, 'tui.select.cancel')) {
+      this.done(undefined);
+    } else if (kb.matches(data, 'tui.select.confirm')) {
+      const selected = this.matches[index];
+
+      if (selected) {
+        this.done(selected.text);
       }
+    } else if (kb.matches(data, 'tui.select.up')) {
+      this.selectedIndex = count ? (index + count - 1) % count : 0;
+    } else if (
+      kb.matches(data, 'tui.select.down') ||
+      matchesKey(data, Key.ctrl('r'))
+    ) {
+      this.selectedIndex = count ? (index + 1) % count : 0;
     } else if (kb.matches(data, 'tui.select.pageUp')) {
-      this.list.setSelectedIndex(index - this.maxVisible);
+      this.selectedIndex = Math.max(0, index - this.maxVisible);
     } else if (kb.matches(data, 'tui.select.pageDown')) {
-      this.list.setSelectedIndex(index + this.maxVisible);
+      this.selectedIndex = Math.max(
+        0,
+        Math.min(count - 1, index + this.maxVisible)
+      );
     } else {
       const query = this.input.getValue();
 
@@ -164,12 +144,15 @@ export class HistoryPicker implements Component, Focusable {
     }
 
     const rows = Math.max(1, Math.floor(this.tui.terminal.rows / 2));
-    const maxVisible = Math.max(1, Math.min(8, Math.floor((rows - 6) / 2)));
+    this.maxVisible = Math.max(1, Math.min(8, Math.floor((rows - 6) / 2)));
 
-    if (maxVisible !== this.maxVisible) {
-      this.maxVisible = maxVisible;
-      this.createList(this.selectedIndex());
-    }
+    const start = Math.max(
+      0,
+      Math.min(
+        this.selectedIndex - Math.floor(this.maxVisible / 2),
+        this.matches.length - this.maxVisible
+      )
+    );
 
     const lines = [
       this.theme.fg(
@@ -179,12 +162,34 @@ export class HistoryPicker implements Component, Focusable {
         )
       ),
       ...this.input.render(width),
-      ...(this.matches.length
-        ? this.list.render(Math.max(4, width))
-        : [this.theme.fg('warning', 'No matching prompts')]),
     ];
 
-    const selected = this.matches[this.selectedIndex()];
+    for (const [offset, prompt] of this.matches
+      .slice(start, start + this.maxVisible)
+      .entries()) {
+      const selected = start + offset === this.selectedIndex;
+      const label = truncateToWidth(prompt.label, Math.max(0, width - 4), '');
+      const line = `${selected ? '→ ' : '  '}${label}`;
+
+      lines.push(selected ? this.theme.fg('accent', line) : line);
+    }
+
+    if (!this.matches.length) {
+      lines.push(this.theme.fg('warning', 'No matching prompts'));
+    } else if (this.matches.length > this.maxVisible) {
+      lines.push(
+        this.theme.fg(
+          'dim',
+          truncateToWidth(
+            `  (${String(this.selectedIndex + 1)}/${String(this.matches.length)})`,
+            Math.max(0, width - 2),
+            ''
+          )
+        )
+      );
+    }
+
+    const selected = this.matches[this.selectedIndex];
     const previewRows = Math.min(6, rows - lines.length - 4);
 
     if (selected && previewRows > 0) {
@@ -227,6 +232,5 @@ export class HistoryPicker implements Component, Focusable {
 
   invalidate() {
     this.input.invalidate();
-    this.list.invalidate();
   }
 }
