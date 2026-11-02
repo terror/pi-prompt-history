@@ -149,21 +149,27 @@ async function* parseEntries(path: string, signal: AbortSignal) {
 }
 
 export function uniquePrompts(prompts: Prompt[]): Prompt[] {
-  const unique = new Map<string, Prompt>();
+  const projects = new Map<string, Map<string, Prompt>>();
+  const unique: Prompt[] = [];
 
   for (const prompt of prompts) {
-    const key = JSON.stringify([prompt.text, prompt.cwd]);
+    const project = projects.get(prompt.cwd) ?? new Map<string, Prompt>();
 
-    const previous = unique.get(key);
+    projects.set(prompt.cwd, project);
+
+    const previous = project.get(prompt.text);
 
     if (previous) {
       previous.timestamp = Math.max(previous.timestamp, prompt.timestamp);
     } else {
-      unique.set(key, { ...prompt });
+      const entry = { ...prompt };
+
+      project.set(prompt.text, entry);
+      unique.push(entry);
     }
   }
 
-  return [...unique.values()].sort((a, b) => b.timestamp - a.timestamp);
+  return unique.sort((a, b) => b.timestamp - a.timestamp);
 }
 
 async function readDirectory(path: string) {
