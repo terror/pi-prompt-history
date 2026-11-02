@@ -1,5 +1,3 @@
-import { contentText } from '@earendil-works/pi-ai';
-import type { FileEntry } from '@earendil-works/pi-coding-agent';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -9,13 +7,46 @@ export interface Prompt {
   timestamp: number;
 }
 
-export function extractPrompts(
-  entries: Iterable<FileEntry>,
-  cwd = ''
-): Prompt[] {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function promptText(content: unknown): string | undefined {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return undefined;
+  }
+
+  const text: string[] = [];
+
+  for (const block of content as unknown[]) {
+    if (!isRecord(block)) {
+      return undefined;
+    }
+
+    if (block.type === 'text') {
+      if (typeof block.text !== 'string') {
+        return undefined;
+      }
+
+      text.push(block.text);
+    }
+  }
+
+  return text.join('\n');
+}
+
+export function extractPrompts(entries: Iterable<unknown>, cwd = ''): Prompt[] {
   const prompts: Prompt[] = [];
 
   for (const entry of entries) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+
     if (entry.type === 'session') {
       if (typeof entry.cwd === 'string') {
         cwd = entry.cwd;
@@ -24,31 +55,35 @@ export function extractPrompts(
       continue;
     }
 
+    const message = entry.message;
+
     if (
       entry.type !== 'message' ||
-      entry.message.role !== 'user' ||
-      !Number.isFinite(entry.message.timestamp)
+      !isRecord(message) ||
+      message.role !== 'user' ||
+      typeof message.timestamp !== 'number' ||
+      !Number.isFinite(message.timestamp)
     ) {
       continue;
     }
 
-    const text = contentText(entry.message.content);
+    const text = promptText(message.content);
 
-    if (!text.trim()) {
+    if (!text?.trim()) {
       continue;
     }
 
     prompts.push({
       text,
       cwd,
-      timestamp: entry.message.timestamp,
+      timestamp: message.timestamp,
     });
   }
 
   return prompts;
 }
 
-function* parseEntries(content: Uint8Array): Generator<FileEntry> {
+function* parseEntries(content: Uint8Array) {
   const decoder = new TextDecoder('utf-8', { fatal: true });
 
   let offset = 0;
@@ -61,21 +96,7 @@ function* parseEntries(content: Uint8Array): Generator<FileEntry> {
     offset = end + 1;
 
     try {
-      const entry = JSON.parse(decoder.decode(line)) as FileEntry;
-
-      if (
-        entry.type === 'message' &&
-        (entry.message.role !== 'user' ||
-          !Number.isFinite(entry.message.timestamp) ||
-          (typeof entry.message.content !== 'string' &&
-            !entry.message.content.every(
-              (block) => block.type !== 'text' || typeof block.text === 'string'
-            )))
-      ) {
-        continue;
-      }
-
-      yield entry;
+      yield JSON.parse(decoder.decode(line)) as unknown;
     } catch {
       continue;
     }
