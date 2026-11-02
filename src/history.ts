@@ -86,7 +86,7 @@ export async function extractPrompts(
   return prompts;
 }
 
-async function* parseEntries(path: string, signal: AbortSignal) {
+async function* parseEntries(path: string, size: number, signal: AbortSignal) {
   const decoder = new TextDecoder('utf-8', { fatal: true });
 
   function parse(content: Uint8Array): unknown {
@@ -104,20 +104,25 @@ async function* parseEntries(path: string, signal: AbortSignal) {
 
     const fragments: Uint8Array[] = [];
 
-    for (;;) {
+    let position = 0;
+
+    while (position < size) {
       signal.throwIfAborted();
 
-      const { bytesRead } = await file.read(buffer, 0, buffer.length, null);
+      const { bytesRead } = await file.read(
+        buffer,
+        0,
+        Math.min(buffer.length, size - position),
+        position
+      );
 
       signal.throwIfAborted();
 
       if (!bytesRead) {
-        if (fragments.length) {
-          yield parse(Buffer.concat(fragments));
-        }
-
-        return;
+        break;
       }
+
+      position += bytesRead;
 
       const content = buffer.subarray(0, bytesRead);
 
@@ -145,6 +150,12 @@ async function* parseEntries(path: string, signal: AbortSignal) {
 
         yield parse(line);
       }
+    }
+
+    signal.throwIfAborted();
+
+    if (fragments.length) {
+      yield parse(Buffer.concat(fragments));
     }
   } finally {
     await file.close();
@@ -303,7 +314,9 @@ export class HistoryStore {
             : {
                 mtime: info.mtimeMs,
                 size: info.size,
-                prompts: await extractPrompts(parseEntries(file, signal)),
+                prompts: await extractPrompts(
+                  parseEntries(file, info.size, signal)
+                ),
               };
 
         signal.throwIfAborted();
