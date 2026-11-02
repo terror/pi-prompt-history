@@ -115,6 +115,8 @@ export class HistoryPicker implements Component, Focusable {
   /** Search field that receives focus and query input. */
   private readonly input: Input;
 
+  private renderedInput: { width: number; lines: string[] } | undefined;
+
   /** Display labels cached as prompts enter the visible list. */
   private readonly labels = new Map<Prompt, string>();
 
@@ -163,13 +165,27 @@ export class HistoryPicker implements Component, Focusable {
   }
 
   set focused(value: boolean) {
-    this.input.focused = value;
+    if (this.input.focused !== value) {
+      this.input.focused = value;
+
+      this.invalidate();
+    }
   }
 
   private pasteQuery(text: string) {
     this.input.handleInput(
       `\x1b[200~${displayText(text, text.length).text.replace(/\s+/g, ' ')}\x1b[201~`
     );
+
+    this.invalidate();
+  }
+
+  private renderInput(width: number): string[] {
+    if (this.renderedInput?.width !== width) {
+      this.renderedInput = { width, lines: this.input.render(width) };
+    }
+
+    return this.renderedInput.lines;
   }
 
   private filter() {
@@ -218,6 +234,8 @@ export class HistoryPicker implements Component, Focusable {
         this.pasteQuery(data.slice(6, -6));
       } else {
         this.input.handleInput(data);
+
+        this.invalidate();
       }
 
       if (this.input.getValue() !== query) {
@@ -277,7 +295,7 @@ export class HistoryPicker implements Component, Focusable {
               ? []
               : [this.theme.fg('dim', 'Search prompts or project paths'), '']),
           ]),
-      ...(rows > 1 ? this.input.render(width) : []),
+      ...(rows > 1 ? this.renderInput(width) : []),
       ...(compact ? [] : ['']),
     ];
 
@@ -381,5 +399,7 @@ export class HistoryPicker implements Component, Focusable {
 
   invalidate() {
     this.input.invalidate();
+
+    this.renderedInput = undefined;
   }
 }
