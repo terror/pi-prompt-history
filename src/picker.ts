@@ -233,9 +233,13 @@ export class HistoryPicker implements Component, Focusable {
       return [];
     }
 
-    const rows = Math.max(6, this.tui.terminal.rows - 4);
+    const terminalRows = Math.max(1, this.tui.terminal.rows);
+
+    const rows = terminalRows >= 10 ? terminalRows - 4 : terminalRows;
 
     const compact = rows < 16;
+
+    const minimal = rows < 6;
 
     const keys = (action: Parameters<KeybindingsManager['getKeys']>[0]) =>
       this.keybindings
@@ -248,26 +252,32 @@ export class HistoryPicker implements Component, Focusable {
         )
         .join('/');
 
-    const footer = [
-      ...(compact ? [] : ['']),
-      this.theme.fg(
-        'dim',
-        `  ${keys('tui.select.confirm')} to insert · Ctrl+R next · ${keys('tui.select.cancel')} to cancel`
-      ),
-      ...this.border.render(width),
-    ];
+    const footer = minimal
+      ? []
+      : [
+          ...(compact ? [] : ['']),
+          this.theme.fg(
+            'dim',
+            `  ${keys('tui.select.confirm')} to insert · Ctrl+R next · ${keys('tui.select.cancel')} to cancel`
+          ),
+          ...this.border.render(width),
+        ];
 
     const lines = [
-      ...this.border.render(width),
-      ...(compact ? [] : ['']),
-      this.theme.fg(
-        'muted',
-        `Prompt history · ${String(this.matches.length)}/${String(this.prompts.length)}`
-      ),
-      ...(compact
+      ...(minimal
         ? []
-        : [this.theme.fg('dim', 'Search prompts or project paths'), '']),
-      ...this.input.render(width),
+        : [
+            ...this.border.render(width),
+            ...(compact ? [] : ['']),
+            this.theme.fg(
+              'muted',
+              `Prompt history · ${String(this.matches.length)}/${String(this.prompts.length)}`
+            ),
+            ...(compact
+              ? []
+              : [this.theme.fg('dim', 'Search prompts or project paths'), '']),
+          ]),
+      ...(rows > 1 ? this.input.render(width) : []),
       ...(compact ? [] : ['']),
     ];
 

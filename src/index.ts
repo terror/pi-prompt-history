@@ -12,6 +12,15 @@ import { HistoryPicker } from './picker.ts';
 
 const store = new HistoryStore();
 
+const dialogOptions = {
+  overlay: true,
+  overlayOptions: {
+    width: '100%',
+    maxHeight: '100%',
+    anchor: 'bottom-center',
+  },
+} as const;
+
 export default function (pi: ExtensionAPI) {
   const lifecycle = new AbortController();
 
@@ -126,7 +135,7 @@ export default function (pi: ExtensionAPI) {
             }
           }
         );
-      });
+      }, dialogOptions);
     } catch (error) {
       if (!isShutdown()) {
         ctx.ui.notify(
