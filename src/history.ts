@@ -342,13 +342,13 @@ export class HistoryStore {
       }
     });
 
+    signal.throwIfAborted();
+
     for (const file of this.cache.keys()) {
-      if (!files.has(file)) {
+      if (file !== currentFile && !files.has(file)) {
         this.cache.delete(file);
       }
     }
-
-    signal.throwIfAborted();
 
     return { prompts: prompts.flat(), skipped };
   }

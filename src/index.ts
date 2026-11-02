@@ -10,19 +10,30 @@ import { join } from 'node:path';
 import { HistoryStore, extractPrompts, uniquePrompts } from './history.ts';
 import { HistoryPicker } from './picker.ts';
 
+const store = new HistoryStore();
+
 export default function (pi: ExtensionAPI) {
-  const store = new HistoryStore();
+  const lifecycle = new AbortController();
+
+  const isShutdown = () => lifecycle.signal.aborted;
 
   let open = false;
 
-  async function showHistory(ctx: ExtensionContext, query: string) {
-    if (ctx.mode !== 'tui') {
-      ctx.ui.notify('Prompt history requires interactive mode', 'error');
+  let close: (() => void) | undefined;
 
+  pi.on('session_shutdown', () => {
+    lifecycle.abort();
+    close?.();
+  });
+
+  async function showHistory(ctx: ExtensionContext, query: string) {
+    if (open || isShutdown()) {
       return;
     }
 
-    if (open) {
+    if (ctx.mode !== 'tui') {
+      ctx.ui.notify('Prompt history requires interactive mode', 'error');
+
       return;
     }
 
@@ -38,22 +49,25 @@ export default function (pi: ExtensionAPI) {
           'Loading prompt history…'
         );
 
-        loader.onAbort = () => done(undefined);
+        const signal = AbortSignal.any([loader.signal, lifecycle.signal]);
+
+        close = () => done(undefined);
+        loader.onAbort = close;
 
         store
           .load(
             join(getAgentDir(), 'sessions'),
             ctx.sessionManager.getSessionDir(),
             ctx.sessionManager.getSessionFile(),
-            loader.signal
+            signal
           )
           .then((result) => {
-            if (!loader.signal.aborted) {
+            if (!signal.aborted) {
               done(result);
             }
           })
           .catch((error: unknown) => {
-            if (!loader.signal.aborted) {
+            if (!signal.aborted) {
               done(error instanceof Error ? error : new Error(String(error)));
             }
           });
@@ -61,7 +75,9 @@ export default function (pi: ExtensionAPI) {
         return loader;
       });
 
-      if (!history) {
+      close = undefined;
+
+      if (!history || isShutdown()) {
         return;
       }
 
@@ -89,30 +105,34 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      await ctx.ui.custom<undefined>(
-        (tui, theme, keybindings, done) =>
-          new HistoryPicker(
-            tui,
-            theme,
-            keybindings,
-            prompts,
-            query,
-            (selected) => {
-              done(undefined);
+      await ctx.ui.custom<undefined>((tui, theme, keybindings, done) => {
+        close = () => done(undefined);
 
-              if (selected !== undefined) {
-                ctx.ui.setEditorText(selected);
-                tui.requestRender();
-              }
+        return new HistoryPicker(
+          tui,
+          theme,
+          keybindings,
+          prompts,
+          query,
+          (selected) => {
+            done(undefined);
+
+            if (selected !== undefined && !isShutdown()) {
+              ctx.ui.setEditorText(selected);
+              tui.requestRender();
             }
-          )
-      );
+          }
+        );
+      });
     } catch (error) {
-      ctx.ui.notify(
-        `Could not load prompt history: ${error instanceof Error ? error.message : String(error)}`,
-        'error'
-      );
+      if (!isShutdown()) {
+        ctx.ui.notify(
+          `Could not load prompt history: ${error instanceof Error ? error.message : String(error)}`,
+          'error'
+        );
+      }
     } finally {
+      close = undefined;
       open = false;
     }
   }
