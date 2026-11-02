@@ -24,42 +24,45 @@ function displayText(text: string): string {
     .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
 }
 
-interface DisplayPrompt extends Prompt {
-  label: string;
-  searchText: string;
-  displayText: string;
-  displayCwd: string;
+function previewLines(text: string, width: number, rows: number): string[] {
+  let length = Math.min(text.length, width * (rows + 1));
+
+  for (;;) {
+    const lines = wrapTextWithAnsi(text.slice(0, length), width);
+
+    if (length === text.length || lines.length > rows) {
+      return lines.slice(0, rows + 1);
+    }
+
+    length = Math.min(text.length, length * 2);
+  }
 }
 
 export class HistoryPicker implements Component, Focusable {
   private readonly input: Input;
-  private readonly prompts: DisplayPrompt[];
-  private matches: DisplayPrompt[] = [];
+  private readonly labels = new Map<Prompt, string>();
+  private readonly searchText = new Map<Prompt, string>();
+  private matches: Prompt[] = [];
   private selectedIndex = 0;
   private maxVisible = 8;
   private preview:
-    { prompt: DisplayPrompt; width: number; lines: string[] } | undefined;
+    | {
+        prompt: Prompt;
+        width: number;
+        rows: number;
+        cwd: string;
+        lines: string[];
+      }
+    | undefined;
 
   constructor(
     private readonly tui: TUI,
     private readonly theme: Theme,
     private readonly keybindings: KeybindingsManager,
-    prompts: Prompt[],
+    private readonly prompts: Prompt[],
     query: string,
     private readonly done: (value: string | undefined) => void
   ) {
-    this.prompts = prompts.map((prompt) => {
-      const text = displayText(prompt.text);
-
-      return {
-        ...prompt,
-        label: text.replace(/\s+/g, ' ').slice(0, 200),
-        searchText: `${prompt.text}\n${prompt.cwd}`,
-        displayText: text,
-        displayCwd: displayText(prompt.cwd).replace(/\n/g, ' '),
-      };
-    });
-
     this.input = new Input({
       placeholder: 'Search prompts or project paths…',
       placeholderStyle: (text) => theme.fg('dim', text),
@@ -88,7 +91,14 @@ export class HistoryPicker implements Component, Focusable {
     this.matches = fuzzyFilter(
       this.prompts,
       this.input.getValue(),
-      (prompt) => prompt.searchText
+      (prompt) => {
+        const text =
+          this.searchText.get(prompt) ?? `${prompt.text}\n${prompt.cwd}`;
+
+        this.searchText.set(prompt, text);
+
+        return text;
+      }
     );
     this.selectedIndex = 0;
   }
@@ -168,8 +178,13 @@ export class HistoryPicker implements Component, Focusable {
       .slice(start, start + this.maxVisible)
       .entries()) {
       const selected = start + offset === this.selectedIndex;
-      const label = truncateToWidth(prompt.label, Math.max(0, width - 4), '');
-      const line = `${selected ? '→ ' : '  '}${label}`;
+      const label =
+        this.labels.get(prompt) ??
+        displayText(prompt.text).replace(/\s+/g, ' ').slice(0, 200);
+
+      this.labels.set(prompt, label);
+
+      const line = `${selected ? '→ ' : '  '}${truncateToWidth(label, Math.max(0, width - 4), '')}`;
 
       lines.push(selected ? this.theme.fg('accent', line) : line);
     }
@@ -193,20 +208,23 @@ export class HistoryPicker implements Component, Focusable {
     const previewRows = Math.min(6, rows - lines.length - 4);
 
     if (selected && previewRows > 0) {
-      const date = new Date(selected.timestamp).toLocaleString();
-
-      lines.push(
-        '',
-        this.theme.fg('muted', `${date} · ${selected.displayCwd}`)
-      );
-
-      if (this.preview?.prompt !== selected || this.preview.width !== width) {
+      if (
+        this.preview?.prompt !== selected ||
+        this.preview.width !== width ||
+        this.preview.rows !== previewRows
+      ) {
         this.preview = {
           prompt: selected,
           width,
-          lines: wrapTextWithAnsi(selected.displayText, width),
+          rows: previewRows,
+          cwd: displayText(selected.cwd).replace(/\n/g, ' '),
+          lines: previewLines(displayText(selected.text), width, previewRows),
         };
       }
+
+      const date = new Date(selected.timestamp).toLocaleString();
+
+      lines.push('', this.theme.fg('muted', `${date} · ${this.preview.cwd}`));
 
       const preview = this.preview.lines;
 
