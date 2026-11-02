@@ -11,25 +11,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function promptText(content: unknown): string | undefined {
+function promptText(content: unknown): string {
   if (typeof content === 'string') {
     return content;
   }
 
   if (!Array.isArray(content)) {
-    return undefined;
+    return '';
   }
 
   const text: string[] = [];
 
   for (const block of content as unknown[]) {
     if (!isRecord(block)) {
-      return undefined;
+      return '';
     }
 
     if (block.type === 'text') {
       if (typeof block.text !== 'string') {
-        return undefined;
+        return '';
       }
 
       text.push(block.text);
@@ -69,7 +69,7 @@ export function extractPrompts(entries: Iterable<unknown>, cwd = ''): Prompt[] {
 
     const text = promptText(message.content);
 
-    if (!text?.trim()) {
+    if (!text.trim()) {
       continue;
     }
 
