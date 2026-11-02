@@ -11,7 +11,6 @@ import {
   type TUI,
   fuzzyFilter,
   matchesKey,
-  stripTerminalSequences,
   truncateToWidth,
   visibleWidth,
   wrapTextWithAnsi,
@@ -20,25 +19,94 @@ import { basename } from 'node:path';
 
 import type { Prompt } from './history.ts';
 
-function displayText(text: string): string {
-  return stripTerminalSequences(text)
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+function displayText(text: string, limit = 16 * 1024) {
+  const prefix = text.slice(0, limit);
+
+  let display = '';
+
+  let truncated = prefix.length < text.length;
+
+  for (let index = 0; index < prefix.length; index++) {
+    const character = prefix.charAt(index);
+
+    if (character !== '\x1b') {
+      display += character;
+
+      continue;
+    }
+
+    const introducer = prefix.charAt(++index);
+
+    if (!introducer) {
+      truncated = true;
+
+      break;
+    }
+
+    if (introducer === '[') {
+      index++;
+
+      while (index < prefix.length && !/[@-~]/.test(prefix.charAt(index))) {
+        index++;
+      }
+    } else if (']PX^_'.includes(introducer)) {
+      index++;
+
+      while (
+        index < prefix.length &&
+        prefix.charAt(index) !== '\x07' &&
+        !(prefix.charAt(index) === '\x1b' && prefix.charAt(index + 1) === '\\')
+      ) {
+        index++;
+      }
+
+      if (prefix.charAt(index) === '\x1b') {
+        index++;
+      }
+    } else {
+      while (index < prefix.length && /[ -/]/.test(prefix.charAt(index))) {
+        index++;
+      }
+    }
+
+    if (index >= prefix.length) {
+      truncated = true;
+    }
+  }
+
+  const sanitized = display
     .replace(/\r\n?/g, '\n')
     .replace(/\t/g, '  ')
-    .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
+    .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '')
+    .replace(/[\ud800-\udfff]/gu, '');
+
+  const end =
+    prefix.length < text.length
+      ? (graphemes.segment(sanitized).containing(sanitized.length - 1)?.index ??
+        0)
+      : sanitized.length;
+
+  return { text: sanitized.slice(0, end), truncated };
+}
+
+function labelText(text: string): string {
+  const display = displayText(text, 2048);
+
+  return `${display.text.replace(/\s+/g, ' ')}${display.truncated ? '…' : ''}`;
 }
 
 function previewLines(text: string, width: number, rows: number): string[] {
-  let length = Math.min(text.length, width * (rows + 1));
+  const display = displayText(text);
 
-  for (;;) {
-    const lines = wrapTextWithAnsi(text.slice(0, length), width);
+  const lines = wrapTextWithAnsi(display.text, width);
 
-    if (length === text.length || lines.length > rows) {
-      return lines.slice(0, rows + 1);
-    }
-
-    length = Math.min(text.length, length * 2);
+  if (display.truncated) {
+    lines.push('…');
   }
+
+  return lines.slice(0, rows + 1);
 }
 
 export class HistoryPicker implements Component, Focusable {
@@ -100,7 +168,7 @@ export class HistoryPicker implements Component, Focusable {
 
   private pasteQuery(text: string) {
     this.input.handleInput(
-      `\x1b[200~${displayText(text).replace(/\s+/g, ' ')}\x1b[201~`
+      `\x1b[200~${displayText(text, text.length).text.replace(/\s+/g, ' ')}\x1b[201~`
     );
   }
 
@@ -227,16 +295,11 @@ export class HistoryPicker implements Component, Focusable {
       .entries()) {
       const selected = start + offset === this.selectedIndex;
 
-      const label =
-        this.labels.get(prompt) ??
-        displayText(prompt.text).replace(/\s+/g, ' ').slice(0, 200);
+      const label = this.labels.get(prompt) ?? labelText(prompt.text);
 
       this.labels.set(prompt, label);
 
-      const project = displayText(basename(prompt.cwd) || prompt.cwd).replace(
-        /\n/g,
-        ' '
-      );
+      const project = labelText(basename(prompt.cwd) || prompt.cwd);
 
       const badge = truncateToWidth(
         project ? ` [${project}]` : '',
@@ -286,9 +349,9 @@ export class HistoryPicker implements Component, Focusable {
           prompt: selected,
           width,
           rows: previewRows,
-          cwd: displayText(selected.cwd).replace(/\n/g, ' '),
+          cwd: labelText(selected.cwd),
           lines: previewLines(
-            displayText(selected.text),
+            selected.text,
             Math.max(1, width - 2),
             previewRows
           ),
