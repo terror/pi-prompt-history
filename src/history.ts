@@ -291,6 +291,10 @@ export class HistoryStore {
 
         signal.throwIfAborted();
 
+        if (!info.isFile()) {
+          throw new Error('Not a regular session file');
+        }
+
         const cached = this.cache.get(file);
 
         const entry =
