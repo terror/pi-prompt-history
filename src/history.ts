@@ -133,6 +133,34 @@ async function readDirectory(path: string) {
   }
 }
 
+async function mapConcurrent<T, U>(
+  values: T[],
+  signal: AbortSignal,
+  fn: (value: T) => Promise<U>
+): Promise<U[]> {
+  const entries = values.entries();
+  const results = new Array<U>(values.length);
+  const workers = Array.from(
+    { length: Math.min(8, values.length) },
+    async () => {
+      for (const [index, value] of entries) {
+        signal.throwIfAborted();
+        results[index] = await fn(value);
+        signal.throwIfAborted();
+      }
+    }
+  );
+
+  const settled = await Promise.allSettled(workers);
+  const failed = settled.find((result) => result.status === 'rejected');
+
+  if (failed) {
+    throw failed.reason;
+  }
+
+  return results;
+}
+
 export class HistoryStore {
   private readonly cache = new Map<
     string,
@@ -152,11 +180,25 @@ export class HistoryStore {
 
     let skipped = 0;
 
-    for (const directory of directories) {
-      signal.throwIfAborted();
+    let pending = [...directories];
 
-      try {
-        for (const entry of await readDirectory(directory)) {
+    while (pending.length) {
+      const next: string[] = [];
+      const results = await mapConcurrent(
+        pending,
+        signal,
+        async (directory) => {
+          try {
+            return { directory, entries: await readDirectory(directory) };
+          } catch {
+            skipped++;
+            return { directory, entries: [] };
+          }
+        }
+      );
+
+      for (const { directory, entries } of results) {
+        for (const entry of entries) {
           const path = join(directory, entry.name);
 
           if (path === currentFile) {
@@ -170,23 +212,22 @@ export class HistoryStore {
             files.add(path);
           } else if (
             directory === root &&
-            (entry.isDirectory() || entry.isSymbolicLink())
+            (entry.isDirectory() || entry.isSymbolicLink()) &&
+            !directories.has(path)
           ) {
             directories.add(path);
+            next.push(path);
           }
         }
-      } catch {
-        skipped++;
       }
+
+      pending = next;
     }
 
-    const prompts: Prompt[] = [];
-
-    for (const file of files) {
-      signal.throwIfAborted();
-
+    const prompts = await mapConcurrent([...files], signal, async (file) => {
       try {
         const info = await stat(file);
+        signal.throwIfAborted();
 
         const cached = this.cache.get(file);
 
@@ -201,17 +242,18 @@ export class HistoryStore {
                 ),
               };
 
+        signal.throwIfAborted();
+
         this.cache.set(file, entry);
 
-        for (const prompt of entry.prompts) {
-          prompts.push(prompt);
-        }
+        return entry.prompts;
       } catch {
         signal.throwIfAborted();
         this.cache.delete(file);
         skipped++;
+        return [];
       }
-    }
+    });
 
     for (const file of this.cache.keys()) {
       if (!files.has(file)) {
@@ -221,6 +263,6 @@ export class HistoryStore {
 
     signal.throwIfAborted();
 
-    return { prompts, skipped };
+    return { prompts: prompts.flat(), skipped };
   }
 }
