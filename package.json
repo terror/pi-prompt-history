@@ -5,7 +5,8 @@
   "type": "module",
   "packageManager": "bun@1.4.3",
   "scripts": {
-    "check": "bun run typecheck && bun run lint && bun run format:check && bun run test",
+    "check": "bun run forbid && bun run typecheck && bun run lint && bun run format:check && bun run test",
+    "forbid": "bin/forbid",
     "format": "bun run lint:fix && prettier --write .",
     "format:check": "prettier --check .",
     "lint": "oxlint . --deny-warnings",

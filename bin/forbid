@@ -2,10 +2,18 @@
 
 set -euo pipefail
 
-which rg
-
-! rg \
+if rg \
   --color always \
   --ignore-case \
   --glob !bin/forbid \
-  'dbg!|fixme|todo|xxx'
+  'dbg!|fixme|todo|xxx'; then
+  exit 1
+else
+  search_status=$?
+
+  if [[ $search_status -eq 1 ]]; then
+    exit 0
+  fi
+
+  exit "$search_status"
+fi
