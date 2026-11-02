@@ -248,7 +248,7 @@ async function mapConcurrent<T, U>(
 export class HistoryStore {
   private readonly cache = new Map<
     string,
-    { mtime: number; size: number; prompts: Prompt[] }
+    { signature: string; prompts: Prompt[] }
   >();
 
   async load(
@@ -322,14 +322,21 @@ export class HistoryStore {
           throw new Error('Not a regular session file');
         }
 
+        const signature = [
+          info.dev,
+          info.ino,
+          info.size,
+          info.mtimeMs,
+          info.ctimeMs,
+        ].join(':');
+
         const cached = this.cache.get(file);
 
         const entry =
-          cached?.mtime === info.mtimeMs && cached.size === info.size
+          cached?.signature === signature
             ? cached
             : {
-                mtime: info.mtimeMs,
-                size: info.size,
+                signature,
                 prompts: await readPrompts(file, info.size, signal),
               };
 
