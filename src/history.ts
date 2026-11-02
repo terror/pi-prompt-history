@@ -42,9 +42,29 @@ function promptText(content: unknown): string {
 class PromptCollector {
   readonly prompts: Prompt[] = [];
 
+  private readonly projects = new Map<string, Map<string, Prompt>>();
+
   constructor(private cwd = '') {}
 
-  add(entry: unknown) {
+  add(text: string, cwd: string, timestamp: number) {
+    const project = this.projects.get(cwd) ?? new Map<string, Prompt>();
+
+    this.projects.set(cwd, project);
+
+    const previous = project.get(text);
+
+    if (previous) {
+      previous.timestamp = Math.max(previous.timestamp, timestamp);
+    } else {
+      const prompt = { text, cwd, timestamp };
+
+      project.set(text, prompt);
+
+      this.prompts.push(prompt);
+    }
+  }
+
+  addEntry(entry: unknown) {
     if (!isRecord(entry)) {
       return;
     }
@@ -75,11 +95,7 @@ class PromptCollector {
       return;
     }
 
-    this.prompts.push({
-      text,
-      cwd: this.cwd,
-      timestamp: message.timestamp,
-    });
+    this.add(text, this.cwd, message.timestamp);
   }
 }
 
@@ -87,7 +103,7 @@ export function extractPrompts(entries: Iterable<unknown>, cwd = ''): Prompt[] {
   const collector = new PromptCollector(cwd);
 
   for (const entry of entries) {
-    collector.add(entry);
+    collector.addEntry(entry);
   }
 
   return collector.prompts;
@@ -158,14 +174,14 @@ async function readPrompts(path: string, size: number, signal: AbortSignal) {
 
         offset = newline + 1;
 
-        collector.add(parse(line));
+        collector.addEntry(parse(line));
       }
     }
 
     signal.throwIfAborted();
 
     if (fragments.length) {
-      collector.add(parse(Buffer.concat(fragments)));
+      collector.addEntry(parse(Buffer.concat(fragments)));
     }
   } finally {
     await file.close();
@@ -175,29 +191,13 @@ async function readPrompts(path: string, size: number, signal: AbortSignal) {
 }
 
 export function uniquePrompts(prompts: Prompt[]): Prompt[] {
-  const projects = new Map<string, Map<string, Prompt>>();
-
-  const unique: Prompt[] = [];
+  const collector = new PromptCollector();
 
   for (const prompt of prompts) {
-    const project = projects.get(prompt.cwd) ?? new Map<string, Prompt>();
-
-    projects.set(prompt.cwd, project);
-
-    const previous = project.get(prompt.text);
-
-    if (previous) {
-      previous.timestamp = Math.max(previous.timestamp, prompt.timestamp);
-    } else {
-      const entry = { ...prompt };
-
-      project.set(prompt.text, entry);
-
-      unique.push(entry);
-    }
+    collector.add(prompt.text, prompt.cwd, prompt.timestamp);
   }
 
-  return unique.sort((a, b) => b.timestamp - a.timestamp);
+  return collector.prompts.sort((a, b) => b.timestamp - a.timestamp);
 }
 
 async function readDirectory(path: string) {
