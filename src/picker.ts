@@ -1,6 +1,7 @@
-import type {
-  KeybindingsManager,
-  Theme,
+import {
+  DynamicBorder,
+  type KeybindingsManager,
+  type Theme,
 } from '@earendil-works/pi-coding-agent';
 import {
   type Component,
@@ -12,8 +13,10 @@ import {
   matchesKey,
   stripTerminalSequences,
   truncateToWidth,
+  visibleWidth,
   wrapTextWithAnsi,
 } from '@earendil-works/pi-tui';
+import { basename } from 'node:path';
 
 import type { Prompt } from './history.ts';
 
@@ -39,6 +42,8 @@ function previewLines(text: string, width: number, rows: number): string[] {
 }
 
 export class HistoryPicker implements Component, Focusable {
+  private readonly border: DynamicBorder;
+
   /** Search field that receives focus and query input. */
   private readonly input: Input;
 
@@ -55,7 +60,7 @@ export class HistoryPicker implements Component, Focusable {
   private selectedIndex = 0;
 
   /** Number of list rows that fit in the current terminal layout. */
-  private maxVisible = 8;
+  private maxVisible = 10;
 
   /** Preview cached for the selected prompt, terminal width, and row limit. */
   private preview:
@@ -76,10 +81,9 @@ export class HistoryPicker implements Component, Focusable {
     query: string,
     private readonly done: (value: string | undefined) => void
   ) {
-    this.input = new Input({
-      placeholder: 'Search prompts or project paths…',
-      placeholderStyle: (text) => theme.fg('dim', text),
-    });
+    this.border = new DynamicBorder((text) => theme.fg('border', text));
+
+    this.input = new Input();
 
     this.pasteQuery(query);
 
@@ -168,9 +172,47 @@ export class HistoryPicker implements Component, Focusable {
       return [];
     }
 
-    const rows = Math.max(1, Math.floor(this.tui.terminal.rows / 2));
+    const rows = Math.max(6, this.tui.terminal.rows - 4);
 
-    this.maxVisible = Math.max(1, Math.min(8, Math.floor((rows - 6) / 2)));
+    const compact = rows < 16;
+
+    const keys = (action: Parameters<KeybindingsManager['getKeys']>[0]) =>
+      this.keybindings
+        .getKeys(action)
+        .map((key) =>
+          key
+            .split('+')
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join('+')
+        )
+        .join('/');
+
+    const footer = [
+      ...(compact ? [] : ['']),
+      this.theme.fg(
+        'dim',
+        `  ${keys('tui.select.confirm')} to insert · Ctrl+R next · ${keys('tui.select.cancel')} to cancel`
+      ),
+      ...this.border.render(width),
+    ];
+
+    const lines = [
+      ...this.border.render(width),
+      ...(compact ? [] : ['']),
+      this.theme.fg(
+        'muted',
+        `Prompt history · ${String(this.matches.length)}/${String(this.prompts.length)}`
+      ),
+      ...(compact
+        ? []
+        : [this.theme.fg('dim', 'Search prompts or project paths'), '']),
+      ...this.input.render(width),
+      ...(compact ? [] : ['']),
+    ];
+
+    const available = rows - lines.length - footer.length;
+
+    this.maxVisible = Math.max(1, Math.min(10, Math.floor(available / 2)));
 
     const start = Math.max(
       0,
@@ -179,16 +221,6 @@ export class HistoryPicker implements Component, Focusable {
         this.matches.length - this.maxVisible
       )
     );
-
-    const lines = [
-      this.theme.fg(
-        'accent',
-        this.theme.bold(
-          `Prompt history · ${String(this.matches.length)}/${String(this.prompts.length)}`
-        )
-      ),
-      ...this.input.render(width),
-    ];
 
     for (const [offset, prompt] of this.matches
       .slice(start, start + this.maxVisible)
@@ -201,17 +233,36 @@ export class HistoryPicker implements Component, Focusable {
 
       this.labels.set(prompt, label);
 
-      const line = `${selected ? '→ ' : '  '}${truncateToWidth(label, Math.max(0, width - 4), '')}`;
+      const project = displayText(basename(prompt.cwd) || prompt.cwd).replace(
+        /\n/g,
+        ' '
+      );
 
-      lines.push(selected ? this.theme.fg('accent', line) : line);
+      const badge = truncateToWidth(
+        project ? ` [${project}]` : '',
+        Math.floor(Math.max(0, width - 6) / 2),
+        '…'
+      );
+
+      const text = truncateToWidth(
+        label,
+        Math.max(0, width - 4 - visibleWidth(badge)),
+        '…'
+      );
+
+      const cursor = selected ? this.theme.fg('accent', '→ ') : '  ';
+
+      lines.push(
+        `${cursor}  ${selected ? this.theme.fg('accent', text) : text}${this.theme.fg('muted', badge)}`
+      );
     }
 
     if (!this.matches.length) {
-      lines.push(this.theme.fg('warning', 'No matching prompts'));
-    } else if (this.matches.length > this.maxVisible) {
+      lines.push(this.theme.fg('muted', '  No matching prompts'));
+    } else if (this.matches.length > this.maxVisible && available > 1) {
       lines.push(
         this.theme.fg(
-          'dim',
+          'muted',
           truncateToWidth(
             `  (${String(this.selectedIndex + 1)}/${String(this.matches.length)})`,
             Math.max(0, width - 2),
@@ -223,7 +274,7 @@ export class HistoryPicker implements Component, Focusable {
 
     const selected = this.matches[this.selectedIndex];
 
-    const previewRows = Math.min(6, rows - lines.length - 4);
+    const previewRows = Math.min(6, rows - lines.length - footer.length - 2);
 
     if (selected && previewRows > 0) {
       if (
@@ -236,32 +287,28 @@ export class HistoryPicker implements Component, Focusable {
           width,
           rows: previewRows,
           cwd: displayText(selected.cwd).replace(/\n/g, ' '),
-          lines: previewLines(displayText(selected.text), width, previewRows),
+          lines: previewLines(
+            displayText(selected.text),
+            Math.max(1, width - 2),
+            previewRows
+          ),
         };
       }
 
       const date = new Date(selected.timestamp).toLocaleString();
 
-      lines.push('', this.theme.fg('muted', `${date} · ${this.preview.cwd}`));
+      lines.push('', this.theme.fg('muted', `  ${date} · ${this.preview.cwd}`));
 
       const preview = this.preview.lines;
 
-      lines.push(...preview.slice(0, previewRows));
+      lines.push(...preview.slice(0, previewRows).map((line) => `  ${line}`));
 
       if (preview.length > previewRows) {
-        lines[lines.length - 1] = this.theme.fg('dim', '…');
+        lines[lines.length - 1] = this.theme.fg('dim', '  …');
       }
     }
 
-    const keys = (action: Parameters<KeybindingsManager['getKeys']>[0]) =>
-      this.keybindings.getKeys(action).join('/');
-
-    lines.push(
-      this.theme.fg(
-        'dim',
-        `${keys('tui.select.up')}/${keys('tui.select.down')} navigate · ctrl+r next · ${keys('tui.select.confirm')} insert · ${keys('tui.select.cancel')} cancel`
-      )
-    );
+    lines.push(...footer);
 
     return lines.map((line) => truncateToWidth(line, width));
   }
