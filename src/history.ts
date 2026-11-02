@@ -101,6 +101,7 @@ async function* parseEntries(path: string, signal: AbortSignal) {
 
   try {
     const buffer = Buffer.allocUnsafe(64 * 1024);
+
     const fragments: Uint8Array[] = [];
 
     for (;;) {
@@ -129,10 +130,12 @@ async function* parseEntries(path: string, signal: AbortSignal) {
 
         if (newline === -1) {
           fragments.push(Buffer.from(content.subarray(offset)));
+
           break;
         }
 
         const fragment = content.subarray(offset, newline);
+
         const line = fragments.length
           ? Buffer.concat([...fragments, fragment])
           : fragment;
@@ -150,6 +153,7 @@ async function* parseEntries(path: string, signal: AbortSignal) {
 
 export function uniquePrompts(prompts: Prompt[]): Prompt[] {
   const projects = new Map<string, Map<string, Prompt>>();
+
   const unique: Prompt[] = [];
 
   for (const prompt of prompts) {
@@ -190,7 +194,9 @@ async function mapConcurrent<T, U>(
   fn: (value: T) => Promise<U>
 ): Promise<U[]> {
   const entries = values.entries();
+
   const results = new Array<U>(values.length);
+
   const workers = Array.from(
     { length: Math.min(8, values.length) },
     async () => {
@@ -203,6 +209,7 @@ async function mapConcurrent<T, U>(
   );
 
   const settled = await Promise.allSettled(workers);
+
   const failed = settled.find((result) => result.status === 'rejected');
 
   if (failed) {
@@ -227,6 +234,7 @@ export class HistoryStore {
     signal.throwIfAborted();
 
     const directories = new Set([root, currentDir]);
+
     const files = new Set<string>();
 
     let skipped = 0;
@@ -235,6 +243,7 @@ export class HistoryStore {
 
     while (pending.length) {
       const next: string[] = [];
+
       const results = await mapConcurrent(
         pending,
         signal,
@@ -243,6 +252,7 @@ export class HistoryStore {
             return { directory, entries: await readDirectory(directory) };
           } catch {
             skipped++;
+
             return { directory, entries: [] };
           }
         }
@@ -278,6 +288,7 @@ export class HistoryStore {
     const prompts = await mapConcurrent([...files], signal, async (file) => {
       try {
         const info = await stat(file);
+
         signal.throwIfAborted();
 
         const cached = this.cache.get(file);
@@ -300,6 +311,7 @@ export class HistoryStore {
         signal.throwIfAborted();
         this.cache.delete(file);
         skipped++;
+
         return [];
       }
     });

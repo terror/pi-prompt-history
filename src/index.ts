@@ -18,6 +18,7 @@ export default function (pi: ExtensionAPI) {
   async function showHistory(ctx: ExtensionContext, query: string) {
     if (ctx.mode !== 'tui') {
       ctx.ui.notify('Prompt history requires interactive mode', 'error');
+
       return;
     }
 
@@ -84,6 +85,7 @@ export default function (pi: ExtensionAPI) {
 
       if (!prompts.length) {
         ctx.ui.notify('No prompt history found', 'info');
+
         return;
       }
 

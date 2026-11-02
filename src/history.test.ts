@@ -118,9 +118,13 @@ test.each<[unknown, string | undefined]>([
 
 test('groups by text and project, preserving newest timestamps', () => {
   const foo = { ...prompt, timestamp: 2 };
+
   const bar = { ...prompt, timestamp: 1 };
+
   const baz = { ...prompt, timestamp: 3 };
+
   const qux = { ...prompt, cwd: 'bar', timestamp: 4 };
+
   const bob = { ...prompt, text: 'bar', timestamp: 5 };
 
   expect(uniquePrompts([foo, bar, baz, qux, bob])).toStrictEqual([
@@ -132,7 +136,9 @@ test('groups by text and project, preserving newest timestamps', () => {
 
 test('ignores missing directories and reports unreadable paths', async () => {
   const root = join(directory, 'foo');
+
   const currentDir = join(directory, 'bar');
+
   const file = join(root, 'foo.jsonl');
 
   const store = new HistoryStore();

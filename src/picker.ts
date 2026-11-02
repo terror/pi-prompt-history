@@ -40,11 +40,17 @@ function previewLines(text: string, width: number, rows: number): string[] {
 
 export class HistoryPicker implements Component, Focusable {
   private readonly input: Input;
+
   private readonly labels = new Map<Prompt, string>();
+
   private readonly searchText = new Map<Prompt, string>();
+
   private matches: Prompt[] = [];
+
   private selectedIndex = 0;
+
   private maxVisible = 8;
+
   private preview:
     | {
         prompt: Prompt;
@@ -100,6 +106,7 @@ export class HistoryPicker implements Component, Focusable {
         return text;
       }
     );
+
     this.selectedIndex = 0;
   }
 
@@ -107,6 +114,7 @@ export class HistoryPicker implements Component, Focusable {
     const kb = this.keybindings;
 
     const index = this.selectedIndex;
+
     const count = this.matches.length;
 
     if (kb.matches(data, 'tui.select.cancel')) {
@@ -154,6 +162,7 @@ export class HistoryPicker implements Component, Focusable {
     }
 
     const rows = Math.max(1, Math.floor(this.tui.terminal.rows / 2));
+
     this.maxVisible = Math.max(1, Math.min(8, Math.floor((rows - 6) / 2)));
 
     const start = Math.max(
@@ -178,6 +187,7 @@ export class HistoryPicker implements Component, Focusable {
       .slice(start, start + this.maxVisible)
       .entries()) {
       const selected = start + offset === this.selectedIndex;
+
       const label =
         this.labels.get(prompt) ??
         displayText(prompt.text).replace(/\s+/g, ' ').slice(0, 200);
@@ -205,6 +215,7 @@ export class HistoryPicker implements Component, Focusable {
     }
 
     const selected = this.matches[this.selectedIndex];
+
     const previewRows = Math.min(6, rows - lines.length - 4);
 
     if (selected && previewRows > 0) {
